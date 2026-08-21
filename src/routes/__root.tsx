@@ -24,7 +24,32 @@ export const Route = createRootRoute({
     ],
   }),
   component: RootComponent,
+  notFoundComponent: NotFound,
 });
+
+function NotFound() {
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center gap-4 px-4 py-24 text-center">
+      <p className="font-mono text-xs uppercase tracking-widest text-mute">404</p>
+      <h1 className="text-3xl font-semibold tracking-tight">页面不存在</h1>
+      <p className="text-body">课程可能已改名，去目录里找找。</p>
+      <div className="mt-2 flex gap-3">
+        <a
+          href="/"
+          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-on-primary hover:opacity-85"
+        >
+          回首页
+        </a>
+        <a
+          href="/modules"
+          className="rounded-full border border-hairline-strong px-5 py-2 text-sm font-medium hover:bg-canvas-soft-2"
+        >
+          浏览模块
+        </a>
+      </div>
+    </div>
+  );
+}
 
 function RootComponent() {
   const [queryClient] = useState(

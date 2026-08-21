@@ -5,6 +5,9 @@ import { ProgressBar } from "../components/ProgressBar";
 
 export const Route = createFileRoute("/modules/")({
   component: ModulesIndex,
+  head: () => ({
+    meta: [{ title: "课程模块 · k8s-learn" }],
+  }),
 });
 
 function ModulesIndex() {

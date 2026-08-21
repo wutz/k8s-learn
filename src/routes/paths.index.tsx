@@ -5,6 +5,9 @@ import { ProgressRing } from "../components/ProgressBar";
 
 export const Route = createFileRoute("/paths/")({
   component: PathsIndex,
+  head: () => ({
+    meta: [{ title: "学习路径 · k8s-learn" }],
+  }),
 });
 
 function PathsIndex() {

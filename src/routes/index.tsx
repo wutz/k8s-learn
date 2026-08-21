@@ -5,6 +5,16 @@ import { ProgressRing } from "../components/ProgressBar";
 
 export const Route = createFileRoute("/")({
   component: Home,
+  head: () => ({
+    meta: [
+      { title: "k8s-learn — 交互式 Kubernetes 学习站" },
+      {
+        name: "description",
+        content:
+          "基于 k8s-in-action 实战手册的交互式 K8s 学习站：181 篇课程、学习路径、课后测验与进度追踪。",
+      },
+    ],
+  }),
 });
 
 function Home() {

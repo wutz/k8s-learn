@@ -5,6 +5,9 @@ import { manifest } from "../lib/content";
 
 export const Route = createFileRoute("/search")({
   component: SearchPage,
+  head: () => ({
+    meta: [{ title: "搜索 · k8s-learn" }],
+  }),
 });
 
 function SearchPage() {

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { K8sLogo } from "./K8sLogo";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { to: "/", label: "首页" },
@@ -51,6 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </span>
               搜索
             </Link>
+            <ThemeToggle />
           </nav>
         </div>
       </header>

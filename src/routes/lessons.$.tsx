@@ -13,6 +13,14 @@ export const Route = createFileRoute("/lessons/$")({
     if (!lesson) throw notFound();
     return { lesson };
   },
+  head: ({ loaderData }) => ({
+    meta: loaderData
+      ? [
+          { title: `${loaderData.lesson.title} · k8s-learn` },
+          { name: "description", content: loaderData.lesson.description ?? loaderData.lesson.title },
+        ]
+      : [],
+  }),
   component: LessonPage,
 });
 
