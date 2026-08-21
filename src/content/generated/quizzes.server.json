@@ -1,0 +1,1036 @@
+[
+  {
+    "id": "quiz-k8s-kubespray",
+    "lessonId": "k8s/kubespray",
+    "title": "Kubespray 部署要点",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Kubespray 部署 K8s 集群时，集群清单（inventory）通常定义在哪类文件中？",
+        "options": [
+          {
+            "id": "a",
+            "text": "inventory/<集群名>/hosts.ini，按 kube_control_plane / kube_node 等分组"
+          },
+          {
+            "id": "b",
+            "text": "kustomization.yaml 中的 nodes 字段"
+          },
+          {
+            "id": "c",
+            "text": "helmwave.yml 中的 releases 列表"
+          },
+          {
+            "id": "d",
+            "text": "cluster.json 清单文件"
+          }
+        ],
+        "answer": "a",
+        "explanation": "Kubespray 使用 Ansible inventory（hosts.ini）管理节点分组，control plane 与 worker 由不同组区分。"
+      },
+      {
+        "type": "multiple",
+        "prompt": "部署前规划 etcd 所在节点磁盘时，应关注哪些方面？",
+        "options": [
+          {
+            "id": "a",
+            "text": "磁盘写入延迟（etcd 对 fsync 延迟敏感）"
+          },
+          {
+            "id": "b",
+            "text": "使用 SSD/NVMe 等低延迟介质"
+          },
+          {
+            "id": "c",
+            "text": "etcd 与大容量数据服务共享同一块盘以节省资源"
+          },
+          {
+            "id": "d",
+            "text": "提前做磁盘性能基准验证"
+          }
+        ],
+        "answers": [
+          "a",
+          "b",
+          "d"
+        ],
+        "explanation": "etcd 强依赖写入延迟；参考库专门提供 etcd-disk-performance 验证步骤。与高负载服务共享磁盘是典型反模式。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "Kubespray 升级小版本（如 2.30→2.31）前，应先评估配置变更影响再操作。",
+        "answer": true,
+        "explanation": "参考库为 2.30→2.31 专门整理了升级影响评估与检查清单。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-k8s-client",
+    "lessonId": "k8s/client",
+    "title": "kubectl 与客户端工具",
+    "questions": [
+      {
+        "type": "order",
+        "prompt": "将 kubectl 排障命令按「由粗到细」的典型顺序排列：",
+        "items": [
+          "kubectl get pods -n default",
+          "kubectl describe pod my-pod -n default",
+          "kubectl logs my-pod -n default --previous",
+          "kubectl exec -it my-pod -n default -- sh"
+        ],
+        "explanation": "先看状态（get）→ 看事件与配置（describe）→ 看日志（logs，崩溃时用 --previous）→ 最后进容器（exec）。"
+      },
+      {
+        "type": "fill",
+        "prompt": "kubectl 的配置文件默认位于 ______（写完整路径）。",
+        "accepts": [
+          "~/.kube/config",
+          "$HOME/.kube/config",
+          "/root/.kube/config"
+        ],
+        "explanation": "kubectl 默认读取 ~/.kube/config，可用 KUBECONFIG 环境变量覆盖。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "helm 与 kubectl 一样直接操作集群，无需本地渲染即可把 chart 原样发给 API Server。",
+        "answer": false,
+        "explanation": "helm 在本地渲染模板生成 manifest 后再提交；helmwave 则先 build 生成渲染产物再 up。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-k8s-rbac",
+    "lessonId": "k8s/sa-management",
+    "title": "ServiceAccount 与 RBAC",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "要给一个 Pod 内的进程授予「只读 ConfigMap」权限，最合理的做法是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "创建 Role + RoleBinding，绑定到专用 ServiceAccount，Pod spec 引用该 SA"
+          },
+          {
+            "id": "b",
+            "text": "直接把 admin ClusterRole 绑定到 default SA"
+          },
+          {
+            "id": "c",
+            "text": "在容器内硬编 kubeconfig 管理员证书"
+          },
+          {
+            "id": "d",
+            "text": "给 namespace 加标签即可，无需 RBAC"
+          }
+        ],
+        "answer": "a",
+        "explanation": "最小权限原则：Role（命名空间内）+ RoleBinding + 专用 SA，避免使用 default SA 或过大的 ClusterRole。"
+      },
+      {
+        "type": "single",
+        "prompt": "Role 与 ClusterRole 的核心区别是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Role 只能授 Pod 权限，ClusterRole 授所有资源"
+          },
+          {
+            "id": "b",
+            "text": "Role 作用于单个命名空间，ClusterRole 是集群级（也可经 RoleBinding 在命名空间内复用）"
+          },
+          {
+            "id": "c",
+            "text": "ClusterRole 只能绑定给 ServiceAccount"
+          },
+          {
+            "id": "d",
+            "text": "两者只是名字不同，作用域完全一样"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Role 是命名空间作用域；ClusterRole 是集群作用域，但可通过 RoleBinding 在单个命名空间内引用它实现复用。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-base-spegel",
+    "lessonId": "base/spegel",
+    "title": "Spegel 镜像 P2P 分发",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Spegel 加速镜像拉取的核心原理是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "把镜像压缩后存入对象存储"
+          },
+          {
+            "id": "b",
+            "text": "节点间 P2P 分发：已拉取过该镜像的节点作为其他节点的拉取源"
+          },
+          {
+            "id": "c",
+            "text": "在集群外部署更大的中央 Registry"
+          },
+          {
+            "id": "d",
+            "text": "通过 CDN 缓存 Docker Hub"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Spegel 是无状态镜像 P2P 方案：每个节点既是客户端也是源，镜像层已在某节点存在时其他节点直接从它拉取，减轻中心 Registry 压力。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "Spegel 作为「无状态」方案，不需要额外的分布式存储组件即可工作。",
+        "answer": true,
+        "explanation": "它复用节点本地 containerd 已有的镜像内容做分发，无需自建存储。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-base-nfd",
+    "lessonId": "base/nfd",
+    "title": "Node Feature Discovery",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "NFD（Node Feature Discovery）的主要作用是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "自动扩缩容节点数量"
+          },
+          {
+            "id": "b",
+            "text": "发现并上报节点硬件特征（CPU 型号、GPU、PCI 设备等）为标签/扩展资源，供调度使用"
+          },
+          {
+            "id": "c",
+            "text": "监控节点磁盘 IO"
+          },
+          {
+            "id": "d",
+            "text": "管理节点内核升级"
+          }
+        ],
+        "answer": "b",
+        "explanation": "NFD 探测节点 CPU 特性、内存、PCI/GPU 等并打标签，让调度器或 nodeSelector 能按硬件特征调度。"
+      },
+      {
+        "type": "fill",
+        "prompt": "想让 Pod 只调度到带某种硬件特征的节点上，通常在 spec 里配合 ______ 字段引用 NFD 打出的标签。",
+        "accepts": [
+          "nodeSelector",
+          "nodeAffinity",
+          "affinity"
+        ],
+        "explanation": "nodeSelector / nodeAffinity 都可以基于 NFD 标签做筛选。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-network-cilium",
+    "lessonId": "network/cilium",
+    "title": "Cilium CNI",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Cilium 的数据平面基于什么技术？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Open vSwitch"
+          },
+          {
+            "id": "b",
+            "text": "eBPF"
+          },
+          {
+            "id": "c",
+            "text": "IPVS"
+          },
+          {
+            "id": "d",
+            "text": "SR-IOV"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Cilium 基于 eBPF 数据平面，提供 CNI、Service 与 NetworkPolicy 等能力，支持三到七层策略。"
+      },
+      {
+        "type": "single",
+        "prompt": "文档中 Cilium 的 k8sServiceHost 推荐配置为 127.0.0.1（Kubespray 集群），原因是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "减少 DNS 查询次数"
+          },
+          {
+            "id": "b",
+            "text": "走节点本地 nginx 代理直连 API Server，天然高可用且避免 ClusterIP/iptables 竞态"
+          },
+          {
+            "id": "c",
+            "text": "127.0.0.1 加密性更好"
+          },
+          {
+            "id": "d",
+            "text": "绕过 kube-proxy 的负载均衡"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Kubespray 在节点本地部署 nginx 代理 API Server；直连本地地址避免 init 容器经 ClusterIP 访问时的 iptables 竞态，且天然 HA。"
+      },
+      {
+        "type": "multiple",
+        "prompt": "部署 Cilium 前需要检查/修改哪些项？",
+        "options": [
+          {
+            "id": "a",
+            "text": "宿主机是否占用路由表 200/202/2004/2005"
+          },
+          {
+            "id": "b",
+            "text": "Pod CIDR 配置（clusterPoolIPv4PodCIDRList）"
+          },
+          {
+            "id": "c",
+            "text": "bpf.enableTCX 设为 false 以规避已知 bug"
+          },
+          {
+            "id": "d",
+            "text": "必须先卸载 kube-proxy"
+          }
+        ],
+        "answers": [
+          "a",
+          "b",
+          "c"
+        ],
+        "explanation": "参考库明确列出路由表占用、Pod CIDR、enableTCX 三处检查；Cilium 可以与 kube-proxy 共存，并非必须卸载。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "Pod CIDR 用尽扩容地址段时，可以直接修改已有地址段为更大的网段。",
+        "answer": false,
+        "explanation": "不能改原有段，应在 clusterPoolIPv4PodCIDRList 中新增地址段，并重启 cilium-operator。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-network-ingress",
+    "lessonId": "network/istio/ingress",
+    "title": "Kubernetes Ingress",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Ingress 资源本身能直接生效吗？",
+        "options": [
+          {
+            "id": "a",
+            "text": "能，API Server 会自动配置负载均衡"
+          },
+          {
+            "id": "b",
+            "text": "不能，需要集群中运行 Ingress Controller 来监听并实现规则"
+          },
+          {
+            "id": "c",
+            "text": "只有 NodePort 类型的 Ingress 能生效"
+          },
+          {
+            "id": "d",
+            "text": "取决于 Pod 数量"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Ingress 只是规则声明，必须有 Ingress Controller（如 ingress-nginx、Istio Ingress）才能落地。"
+      },
+      {
+        "type": "order",
+        "prompt": "一条 HTTP 请求从外部进入集群，经过的正确顺序是：",
+        "items": [
+          "外部客户端",
+          "Ingress Controller（七层路由）",
+          "Service（ClusterIP 负载均衡）",
+          "Pod"
+        ],
+        "explanation": "典型链路：客户端 → Ingress Controller → Service → Pod。"
+      },
+      {
+        "type": "single",
+        "prompt": "Gateway API 相比传统 Ingress 的核心改进是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "性能提升 10 倍"
+          },
+          {
+            "id": "b",
+            "text": "角色分离（基础设施提供方/集群运维/应用开发者）与更丰富的路由能力，不再依赖注解扩展"
+          },
+          {
+            "id": "c",
+            "text": "只支持 TCP 协议"
+          },
+          {
+            "id": "d",
+            "text": "替代 CNI"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Gateway API 通过 GatewayClass/Gateway/HTTPRoute 分层模型实现职责分离，原生支持头部匹配、权重路由等能力。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-network-metallb",
+    "lessonId": "network/metallb",
+    "title": "MetalLB",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "MetalLB 解决的核心问题是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Pod 间通信加密"
+          },
+          {
+            "id": "b",
+            "text": "裸金属/自建集群中 LoadBalancer 类型 Service 没有云厂商 LB 可用的问题"
+          },
+          {
+            "id": "c",
+            "text": "DNS 解析慢"
+          },
+          {
+            "id": "d",
+            "text": "Ingress 证书管理"
+          }
+        ],
+        "answer": "b",
+        "explanation": "云上 LoadBalancer Service 由厂商 LB 实现；裸金属环境用 MetalLB 分配 IP 并通过 BGP/ARP 宣告。"
+      },
+      {
+        "type": "single",
+        "prompt": "MetalLB 在二层（ARP）模式与 BGP 模式之间，哪种更适合与上游交换机组网做等价多路径？",
+        "options": [
+          {
+            "id": "a",
+            "text": "BGP 模式"
+          },
+          {
+            "id": "b",
+            "text": "二层模式"
+          },
+          {
+            "id": "c",
+            "text": "两者等价"
+          },
+          {
+            "id": "d",
+            "text": "MetalLB 不支持 BGP"
+          }
+        ],
+        "answer": "a",
+        "explanation": "BGP 模式向网络宣告服务 IP，可配合 ECMP 实现多节点流量分发与故障切换。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-network-cert-manager",
+    "lessonId": "network/cert-manager",
+    "title": "cert-manager 证书管理",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "cert-manager 中描述「如何为域名签发证书」的资源是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Certificate 直接手写私钥"
+          },
+          {
+            "id": "b",
+            "text": "Issuer / ClusterIssuer（签发者）+ Certificate（证书声明）"
+          },
+          {
+            "id": "c",
+            "text": "Ingress 的 tls 字段就够了，不需要 cert-manager 资源"
+          },
+          {
+            "id": "d",
+            "text": "Secret 控制器"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Issuer/ClusterIssuer 定义 CA 或 ACME 账号等签发方式；Certificate 声明需要的证书，cert-manager 自动签发续期并写入 Secret。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "HTTP-01 方式验证域名时，Let's Encrypt 需要能通过公网访问到该域名的 80 端口。",
+        "answer": true,
+        "explanation": "HTTP-01 依赖公网可访问的 HTTP 端点回源验证；内网服务应选 DNS-01。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-storage-local",
+    "lessonId": "storage/local-storage",
+    "title": "本地存储",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "使用节点本地盘的 PV，最主要的代价是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "性能比网络存储差"
+          },
+          {
+            "id": "b",
+            "text": "数据与节点绑定：Pod 漂移到其他节点后无法访问原数据"
+          },
+          {
+            "id": "c",
+            "text": "不支持文件系统"
+          },
+          {
+            "id": "d",
+            "text": "必须使用 ext4"
+          }
+        ],
+        "answer": "b",
+        "explanation": "本地盘 I/O 性能最好，但拓扑受限；通常配合 nodeSelector/亲和性或对数据可丢失的场景（缓存、临时计算）使用。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-storage-snapshot",
+    "lessonId": "storage/volumesnapshots",
+    "title": "卷快照",
+    "questions": [
+      {
+        "type": "order",
+        "prompt": "K8s 卷快照体系中的组件按「发起 → 执行」的关系排列：",
+        "items": [
+          "VolumeSnapshot（用户声明）",
+          "VolumeSnapshotClass（指定驱动与参数）",
+          "snapshot-controller / CSI snapshotter",
+          "存储后端创建快照"
+        ],
+        "explanation": "用户创建 VolumeSnapshot 并引用 VolumeSnapshotClass；控制器协调 CSI 驱动在后端生成快照。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "VolumeSnapshotContent 对应快照的实际后端资源，类似 PV 之于 PVC。",
+        "answer": true,
+        "explanation": "快照体系是 PVC/PV 的镜像设计：Snapshot/SnapshotClass 是命名空间侧声明，Content 是集群侧实际资源。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-storage-cephadm-1",
+    "lessonId": "storage/cephadm/1-deploy-ceph-cluster",
+    "title": "Cephadm 部署 Ceph 集群",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "cephadm 引导（bootstrap）集群的作用是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "只安装 Ceph CLI 工具"
+          },
+          {
+            "id": "b",
+            "text": "在首个节点上拉起最小监控域（monitor + manager），形成可管理的集群种子"
+          },
+          {
+            "id": "c",
+            "text": "直接完成 OSD 全部部署"
+          },
+          {
+            "id": "d",
+            "text": "把 Ceph 转为 systemd 裸进程运行"
+          }
+        ],
+        "answer": "b",
+        "explanation": "bootstrap 先建立 mon/mgr 最小集群并生成 SSH 密钥与配置，之后通过 ceph orch 把其余主机纳入编排、扩容 OSD。"
+      },
+      {
+        "type": "multiple",
+        "prompt": "规划 Ceph 集群时，下列哪些做法正确？",
+        "options": [
+          {
+            "id": "a",
+            "text": "mon 至少 3 个以保证仲裁"
+          },
+          {
+            "id": "b",
+            "text": "OSD 尽量均匀分布在各主机与故障域上"
+          },
+          {
+            "id": "c",
+            "text": "所有 OSD 用同一块系统盘即可"
+          },
+          {
+            "id": "d",
+            "text": "部署前确认节点间时间同步"
+          }
+        ],
+        "answers": [
+          "a",
+          "b",
+          "d"
+        ],
+        "explanation": "mon 需要 odd 数量保证 quorum；OSD 均衡分布避免热点；独立盘与 NTP 同步都是部署前提。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-storage-gpfs-concept",
+    "lessonId": "storage/gpfs/day-0-concept",
+    "title": "GPFS 核心概念",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "GPFS（Spectrum Scale / ECE）属于哪类存储？",
+        "options": [
+          {
+            "id": "a",
+            "text": "块存储"
+          },
+          {
+            "id": "b",
+            "text": "并行分布式文件系统"
+          },
+          {
+            "id": "c",
+            "text": "对象存储网关"
+          },
+          {
+            "id": "d",
+            "text": "数据库"
+          }
+        ],
+        "answer": "b",
+        "explanation": "GPFS 是高性能并行文件系统，多节点可并发挂载同一文件系统，常见于 HPC 与 AI 场景。"
+      },
+      {
+        "type": "fill",
+        "prompt": "GPFS 集群中提供存储服务的侧称为 owning cluster，客户端挂载侧称为 ______ cluster。",
+        "accepts": [
+          "accessing",
+          "accessing cluster",
+          "访问"
+        ],
+        "explanation": "owning cluster 拥有 NSD/文件系统；accessing cluster 远程挂载使用。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-ai-gpu-operator",
+    "lessonId": "ai/gpu-operator",
+    "title": "GPU Operator",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "GPU Operator 的核心价值是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "把驱动、container toolkit、设备插件等以 Kubernetes 原生方式自动化部署与运维"
+          },
+          {
+            "id": "b",
+            "text": "提升单卡算力"
+          },
+          {
+            "id": "c",
+            "text": "替代调度器分配 GPU"
+          },
+          {
+            "id": "d",
+            "text": "压缩模型体积"
+          }
+        ],
+        "answer": "a",
+        "explanation": "GPU Operator 将 NVIDIA 驱动、nvidia container toolkit、device plugin、DCGM exporter 等打包为集群组件自动管理。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "使用 GPU Operator 管理驱动时，节点主机上不应再单独预装 NVIDIA 驱动（避免冲突）。",
+        "answer": true,
+        "explanation": "operator 容器化部署驱动；宿主机已装驱动会与之冲突，需按文档处理。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-ai-kueue",
+    "lessonId": "ai/kueue",
+    "title": "Kueue 队列管理",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Kueue 的 Gang 调度判断发生在哪一层？",
+        "options": [
+          {
+            "id": "a",
+            "text": "调度层：scheduler 对整组 Pod 统一评估"
+          },
+          {
+            "id": "b",
+            "text": "准入层：资源不足时 Job 保持 suspended，一个 Pod 都不创建"
+          },
+          {
+            "id": "c",
+            "text": "网络层"
+          },
+          {
+            "id": "d",
+            "text": "存储层"
+          }
+        ],
+        "answer": "b",
+        "explanation": "Kueue 在准入层做 Gang 判断——配额不够就不放行（零 Pod）；这是它与 Volcano（调度层整组评估）的一句话差异。"
+      },
+      {
+        "type": "fill",
+        "prompt": "Kueue 中声明「谁可以用多少资源」的配额对象叫 ______，工作负载提交到的队列对象叫 LocalQueue。",
+        "accepts": [
+          "ClusterQueue",
+          "clusterqueue"
+        ],
+        "explanation": "ClusterQueue 定义资源配额池；LocalQueue 是命名空间内指向 ClusterQueue 的提交入口。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "与 Volcano 共存时，应让 Kueue 的 webhook 只处理明确标记的 Job 类资源，避免拦截普通 Pod。",
+        "answer": true,
+        "explanation": "参考库必读章节：Kueue mutating webhook 若包含 pod/deployment 会把未标记 Pod 注入 suspended 并覆盖 schedulerName，破坏 Volcano 调度。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-ai-volcano",
+    "lessonId": "ai/volcano",
+    "title": "Volcano 批调度",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "Volcano 与 Kueue 在 Gang Scheduling 上的关键差异是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Volcano 在调度层做整组评估（Pod 已创建，scheduler 整组判断）；Kueue 在准入层（资源不够零 Pod）"
+          },
+          {
+            "id": "b",
+            "text": "Volcano 不支持 Gang Scheduling"
+          },
+          {
+            "id": "c",
+            "text": "Kueue 需要 GPU 而 Volcano 不需要"
+          },
+          {
+            "id": "d",
+            "text": "两者完全相同"
+          }
+        ],
+        "answer": "a",
+        "explanation": "这正是参考库给出的一句话差异：Volcano 调度层 vs Kueue 准入层。"
+      },
+      {
+        "type": "single",
+        "prompt": "安装 Volcano 后查看队列，为什么文档强调用 kubectl get q 而不是 kubectl get queue？",
+        "options": [
+          {
+            "id": "a",
+            "text": "queue 更长，容易打错"
+          },
+          {
+            "id": "b",
+            "text": "get queue 可能解析到 Kueue 的 LocalQueue CRD，产生混淆"
+          },
+          {
+            "id": "c",
+            "text": "Volcano 没有队列概念"
+          },
+          {
+            "id": "d",
+            "text": "q 是唯一合法缩写"
+          }
+        ],
+        "answer": "b",
+        "explanation": "两个系统都有名为 queue 的资源短名；用 q 或全名 queues.scheduling.volcano.sh 明确指向 Volcano。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-ai-scheduling-comparison",
+    "lessonId": "ai/scheduling-comparison",
+    "title": "批处理调度选型",
+    "questions": [
+      {
+        "type": "multiple",
+        "prompt": "选型批处理/Gang 调度方案时，下列哪些是合理的考量维度？",
+        "options": [
+          {
+            "id": "a",
+            "text": "是否需要队列配额与多租户公平性"
+          },
+          {
+            "id": "b",
+            "text": "训练框架生态（MPI/PyTorch/Ray）的集成方式"
+          },
+          {
+            "id": "c",
+            "text": "与已有组件（如 Kueue webhook）的共存冲突"
+          },
+          {
+            "id": "d",
+            "text": "GPU 型号品牌"
+          }
+        ],
+        "answers": [
+          "a",
+          "b",
+          "c"
+        ],
+        "explanation": "调度选型围绕配额/公平性、生态集成与共存关系展开；GPU 型号本身不是调度器选型决定因素。"
+      },
+      {
+        "type": "single",
+        "prompt": "希望「资源不足时任务排队等待、绝不部分启动」，且偏好纯准入控制不动 kube-scheduler，更适合选？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Kueue"
+          },
+          {
+            "id": "b",
+            "text": "Volcano"
+          },
+          {
+            "id": "c",
+            "text": "NodeLocalDNS"
+          },
+          {
+            "id": "d",
+            "text": "MetalLB"
+          }
+        ],
+        "answer": "a",
+        "explanation": "Kueue 的 suspended 准入模型天然满足「零 Pod 排队」语义，且复用默认调度器。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-o11y-vm",
+    "lessonId": "o11y/vm",
+    "title": "VictoriaMetrics",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "VictoriaMetrics 相对 Prometheus 的定位是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "兼容 PromQL 生态、面向长期存储与更高压缩比/更低资源占用的时序数据库"
+          },
+          {
+            "id": "b",
+            "text": "日志系统"
+          },
+          {
+            "id": "c",
+            "text": "链路追踪系统"
+          },
+          {
+            "id": "d",
+            "text": "K8s 发行版"
+          }
+        ],
+        "answer": "a",
+        "explanation": "VM 兼容 Prometheus 指标协议与 PromQL（含 vmagent/vminsert 等组件），主打高压缩长期存储，常作为 Prometheus 的远端存储或替代。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "vmagent 可以抓取（scrape）指标并远程写入 VictoriaMetrics。",
+        "answer": true,
+        "explanation": "vmagent 是采集代理，支持 prometheus 抓取配置与 remote write 协议。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-repo-harbor",
+    "lessonId": "repo/harbor",
+    "title": "Harbor 镜像仓库",
+    "questions": [
+      {
+        "type": "multiple",
+        "prompt": "相比单机 Docker Registry，Harbor 额外提供哪些企业能力？",
+        "options": [
+          {
+            "id": "a",
+            "text": "Web 控制台与多项目管理"
+          },
+          {
+            "id": "b",
+            "text": "镜像漏洞扫描"
+          },
+          {
+            "id": "c",
+            "text": "内容信任/签名与复制规则"
+          },
+          {
+            "id": "d",
+            "text": "自动编译容器镜像"
+          }
+        ],
+        "answers": [
+          "a",
+          "b",
+          "c"
+        ],
+        "explanation": "Harbor 在 Registry 之上提供 RBAC 项目管理、Trivy 扫描、签名与跨仓复制等；不负责构建镜像。"
+      },
+      {
+        "type": "single",
+        "prompt": "参考库中 Harbor 通过什么方式对外暴露服务？",
+        "options": [
+          {
+            "id": "a",
+            "text": "NodePort 固定端口"
+          },
+          {
+            "id": "b",
+            "text": "Istio Ingress / 网关 + TLS"
+          },
+          {
+            "id": "c",
+            "text": "hostNetwork 直接监听 443"
+          },
+          {
+            "id": "d",
+            "text": "仅集群内访问"
+          }
+        ],
+        "answer": "b",
+        "explanation": "文档标题即「Harbor 镜像仓库（Istio Ingress）」，走网关统一入口与证书管理。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-repo-registry",
+    "lessonId": "repo/registry",
+    "title": "Docker Registry",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "自建 registry 使用自签证书时，节点侧需要做什么？",
+        "options": [
+          {
+            "id": "a",
+            "text": "什么都不用做"
+          },
+          {
+            "id": "b",
+            "text": "把 CA 证书放入 containerd/docker 的信任目录（如 /etc/containerd/certs.d/<host>/ca.crt）"
+          },
+          {
+            "id": "c",
+            "text": "必须改用 HTTP 明文"
+          },
+          {
+            "id": "d",
+            "text": "只能购买公共证书"
+          }
+        ],
+        "answer": "b",
+        "explanation": "容器运行时需信任 registry 的 CA；参考库提供 gen-cert.sh 与对应 containerd 配置说明。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-db-kubeblocks-day0",
+    "lessonId": "db/kubeblocks/kbcli-0.9.3/day-0-kubeblocks",
+    "title": "KubeBlocks 简介",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "KubeBlocks 的定位是？",
+        "options": [
+          {
+            "id": "a",
+            "text": "一个数据库引擎"
+          },
+          {
+            "id": "b",
+            "text": "基于 K8s 的数据库管理平台：以统一方式管理 MySQL/PostgreSQL/Redis 等多种引擎的生命周期"
+          },
+          {
+            "id": "c",
+            "text": "备份软件"
+          },
+          {
+            "id": "d",
+            "text": "SQL 审计工具"
+          }
+        ],
+        "answer": "b",
+        "explanation": "KubeBlocks 用统一的 CRD/Operator 抽象管理多种数据库引擎的部署、扩缩容、监控与备份。"
+      },
+      {
+        "type": "fill",
+        "prompt": "KubeBlocks 的命令行工具叫 ______（小写）。",
+        "accepts": [
+          "kbcli"
+        ],
+        "explanation": "kbcli 用于安装 KubeBlocks、创建与管理数据库集群。"
+      }
+    ]
+  },
+  {
+    "id": "quiz-db-redis",
+    "lessonId": "db/redis",
+    "title": "Redis 上 K8s",
+    "questions": [
+      {
+        "type": "single",
+        "prompt": "在 K8s 中运行单机 Redis，持久化数据应使用？",
+        "options": [
+          {
+            "id": "a",
+            "text": "emptyDir"
+          },
+          {
+            "id": "b",
+            "text": "PVC（RWO）挂载到 StatefulSet"
+          },
+          {
+            "id": "c",
+            "text": "hostPath 随意写"
+          },
+          {
+            "id": "d",
+            "text": "ConfigMap 存 RDB 文件"
+          }
+        ],
+        "answer": "b",
+        "explanation": "StatefulSet + PVC 提供稳定存储与身份；emptyDir 重启丢数据，hostPath 绑定节点不利于漂移。"
+      },
+      {
+        "type": "truefalse",
+        "prompt": "Redis 开启 AOF 后，数据安全性通常优于仅使用 RDB 快照。",
+        "answer": true,
+        "explanation": "AOF 追加写命令日志，最多丢失秒级数据；RDB 是间隔快照，窗口内故障会丢更多。"
+      }
+    ]
+  }
+]

@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import { getUserId } from "./identity.server";
+import { gradeQuiz, type QuizResponse } from "./grading.server";
 
 export interface LessonStateRow {
   lesson_id: string;
@@ -114,6 +115,58 @@ export const recordVisit = createServerFn({ method: "POST" })
       .bind(userId, data.lessonId)
       .run();
     return { ok: true as const };
+  });
+
+const submitQuizSchema = z.object({
+  quizId: z.string().min(1).max(200),
+  lessonId: z.string().min(1).max(200),
+  responses: z.array(
+    z.object({
+      single: z.string().optional(),
+      multiple: z.array(z.string()).optional(),
+      truefalse: z.boolean().optional(),
+      order: z.array(z.string()).optional(),
+      fill: z.string().optional(),
+    }),
+  ),
+});
+
+export interface SubmitQuizResult {
+  score: number;
+  correctCount: number;
+  total: number;
+  perQuestion: { correct: boolean; explanation?: string }[];
+}
+
+/** 提交测验 — 服务端判分，记录尝试次数与最高分 */
+export const submitQuiz = createServerFn({ method: "POST" })
+  .validator(submitQuizSchema)
+  .handler(async ({ data }): Promise<SubmitQuizResult> => {
+    const result = gradeQuiz(data.quizId, data.responses as QuizResponse[]);
+    if (!result) throw new Error(`未知测验: ${data.quizId}`);
+
+    const userId = await getUserId();
+    const db = env.DB;
+    await db
+      .prepare(
+        `INSERT INTO lesson_state (user_id, lesson_id, status, best_score, attempts, updated_at)
+         VALUES (?, ?, 'in_progress', ?, 1, unixepoch())
+         ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+           best_score = MAX(COALESCE(lesson_state.best_score, -1), excluded.best_score),
+           attempts = lesson_state.attempts + 1,
+           updated_at = excluded.updated_at`,
+      )
+      .bind(userId, data.lessonId, result.score)
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO progress_events (user_id, lesson_id, event_type, payload)
+         VALUES (?, ?, 'quiz_attempt', ?)`,
+      )
+      .bind(userId, data.lessonId, JSON.stringify({ score: result.score }))
+      .run();
+
+    return result;
   });
 
 async function touchResume(

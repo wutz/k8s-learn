@@ -4,6 +4,7 @@ import { getLesson, getModule } from "../lib/content";
 import { useProgress } from "../lib/progress-client";
 import { LessonBody } from "../components/LessonBody";
 import { ConstructionBadge } from "../components/ConstructionBadge";
+import { QuizRunner } from "../components/QuizRunner";
 import { recordVisit } from "../server/progress";
 
 export const Route = createFileRoute("/lessons/$")({
@@ -113,7 +114,7 @@ function LessonPage() {
           {lesson.quizIds.length > 0 && (
             <section id="quiz" className="mt-14 scroll-mt-20">
               <h2 className="mb-4 text-2xl font-semibold tracking-tight">课后测验</h2>
-              <QuizSection lessonId={lesson.id} quizIds={lesson.quizIds} />
+              <QuizRunner quizIds={lesson.quizIds} lessonId={lesson.id} />
             </section>
           )}
 
@@ -184,17 +185,3 @@ function PrevNextLink({
   );
 }
 
-/** 测验区占位 — Phase 4 接入 QuizRunner */
-function QuizSection({
-  lessonId,
-  quizIds,
-}: {
-  lessonId: string;
-  quizIds: string[];
-}) {
-  return (
-    <div className="rounded-lg border border-hairline bg-canvas-soft p-6 text-sm text-body">
-      本课包含 {quizIds.length} 组测验（{lessonId}）— 测验组件接入中。
-    </div>
-  );
-}

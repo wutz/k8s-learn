@@ -1,1 +1,247 @@
-{}
+{
+  "quiz-k8s-kubespray": [
+    {
+      "answer": "a"
+    },
+    {
+      "answers": [
+        "a",
+        "b",
+        "d"
+      ]
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-k8s-client": [
+    {
+      "items": [
+        "kubectl get pods -n default",
+        "kubectl describe pod my-pod -n default",
+        "kubectl logs my-pod -n default --previous",
+        "kubectl exec -it my-pod -n default -- sh"
+      ]
+    },
+    {
+      "accepts": [
+        "~/.kube/config",
+        "$HOME/.kube/config",
+        "/root/.kube/config"
+      ],
+      "caseSensitive": false
+    },
+    {
+      "answer": false
+    }
+  ],
+  "quiz-k8s-rbac": [
+    {
+      "answer": "a"
+    },
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-base-spegel": [
+    {
+      "answer": "b"
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-base-nfd": [
+    {
+      "answer": "b"
+    },
+    {
+      "accepts": [
+        "nodeSelector",
+        "nodeAffinity",
+        "affinity"
+      ],
+      "caseSensitive": false
+    }
+  ],
+  "quiz-network-cilium": [
+    {
+      "answer": "b"
+    },
+    {
+      "answer": "b"
+    },
+    {
+      "answers": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "answer": false
+    }
+  ],
+  "quiz-network-ingress": [
+    {
+      "answer": "b"
+    },
+    {
+      "items": [
+        "外部客户端",
+        "Ingress Controller（七层路由）",
+        "Service（ClusterIP 负载均衡）",
+        "Pod"
+      ]
+    },
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-network-metallb": [
+    {
+      "answer": "b"
+    },
+    {
+      "answer": "a"
+    }
+  ],
+  "quiz-network-cert-manager": [
+    {
+      "answer": "b"
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-storage-local": [
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-storage-snapshot": [
+    {
+      "items": [
+        "VolumeSnapshot（用户声明）",
+        "VolumeSnapshotClass（指定驱动与参数）",
+        "snapshot-controller / CSI snapshotter",
+        "存储后端创建快照"
+      ]
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-storage-cephadm-1": [
+    {
+      "answer": "b"
+    },
+    {
+      "answers": [
+        "a",
+        "b",
+        "d"
+      ]
+    }
+  ],
+  "quiz-storage-gpfs-concept": [
+    {
+      "answer": "b"
+    },
+    {
+      "accepts": [
+        "accessing",
+        "accessing cluster",
+        "访问"
+      ],
+      "caseSensitive": false
+    }
+  ],
+  "quiz-ai-gpu-operator": [
+    {
+      "answer": "a"
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-ai-kueue": [
+    {
+      "answer": "b"
+    },
+    {
+      "accepts": [
+        "ClusterQueue",
+        "clusterqueue"
+      ],
+      "caseSensitive": false
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-ai-volcano": [
+    {
+      "answer": "a"
+    },
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-ai-scheduling-comparison": [
+    {
+      "answers": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "answer": "a"
+    }
+  ],
+  "quiz-o11y-vm": [
+    {
+      "answer": "a"
+    },
+    {
+      "answer": true
+    }
+  ],
+  "quiz-repo-harbor": [
+    {
+      "answers": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-repo-registry": [
+    {
+      "answer": "b"
+    }
+  ],
+  "quiz-db-kubeblocks-day0": [
+    {
+      "answer": "b"
+    },
+    {
+      "accepts": [
+        "kbcli"
+      ],
+      "caseSensitive": false
+    }
+  ],
+  "quiz-db-redis": [
+    {
+      "answer": "b"
+    },
+    {
+      "answer": true
+    }
+  ]
+}

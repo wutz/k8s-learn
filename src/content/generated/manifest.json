@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-21T08:33:27.339Z",
+  "generatedAt": "2026-08-21T09:15:04.542Z",
   "modules": [
     {
       "id": "k8s",
@@ -61,7 +61,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-k8s-client"
+          ],
           "prevId": "k8s",
           "nextId": "k8s/etcd-disk-performance",
           "sourcePath": "k8s/client.md",
@@ -191,7 +193,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-k8s-kubespray"
+          ],
           "prevId": "k8s/faq",
           "nextId": "k8s/kubespray/kubespray-2.28.0",
           "sourcePath": "k8s/kubespray/README.md",
@@ -584,7 +588,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-k8s-rbac"
+          ],
           "prevId": "k8s/plan",
           "nextId": null,
           "sourcePath": "k8s/sa-management/README.md",
@@ -667,7 +673,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-base-nfd"
+          ],
           "prevId": "base/kube-node-tuning",
           "nextId": "base/spegel",
           "sourcePath": "base/nfd/README.md",
@@ -708,7 +716,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-base-spegel"
+          ],
           "prevId": "base/nfd",
           "nextId": null,
           "sourcePath": "base/spegel/README.md",
@@ -772,7 +782,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-network-cert-manager"
+          ],
           "prevId": "network",
           "nextId": "network/cilium",
           "sourcePath": "network/cert-manager/SKILL.md",
@@ -808,7 +820,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-network-cilium"
+          ],
           "prevId": "network/cert-manager",
           "nextId": "network/ingress-nginx",
           "sourcePath": "network/cilium/README.md",
@@ -1061,7 +1075,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-network-ingress"
+          ],
           "prevId": "network/istio/gateway-api/QUICKSTART",
           "nextId": "network/istio/tests",
           "sourcePath": "network/istio/ingress/README.md",
@@ -1339,7 +1355,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-network-metallb"
+          ],
           "prevId": "network/kube-ovn",
           "nextId": "network/network-operator",
           "sourcePath": "network/metallb/README.md",
@@ -1666,7 +1684,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-storage-cephadm-1"
+          ],
           "prevId": "storage/cephadm",
           "nextId": "storage/cephadm/2-ceph-rados",
           "sourcePath": "storage/cephadm/1-deploy-ceph-cluster.md",
@@ -2234,7 +2254,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-storage-gpfs-concept"
+          ],
           "prevId": "storage/gpfs",
           "nextId": "storage/gpfs/day-0-network",
           "sourcePath": "storage/gpfs/day-0-concept.md",
@@ -2947,7 +2969,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-storage-local"
+          ],
           "prevId": "storage/juicefs-csi",
           "nextId": "storage/longhorn",
           "sourcePath": "storage/local-storage/README.md",
@@ -3197,7 +3221,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-storage-snapshot"
+          ],
           "prevId": "storage/vast",
           "nextId": "storage/volumesnapshots/csi-snapshotter",
           "sourcePath": "storage/volumesnapshots/README.md",
@@ -3807,7 +3833,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-ai-gpu-operator"
+          ],
           "prevId": "ai/evalscope",
           "nextId": "ai/kubeflow",
           "sourcePath": "ai/gpu-operator/README.md",
@@ -4311,7 +4339,9 @@
               "level": 3
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-ai-kueue"
+          ],
           "prevId": "ai/kuberay/rayservice",
           "nextId": "ai/llm-d",
           "sourcePath": "ai/kueue/README.md",
@@ -4927,7 +4957,9 @@
               "level": 3
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-ai-scheduling-comparison"
+          ],
           "prevId": "ai/scheduler-plugins",
           "nextId": "ai/trainer",
           "sourcePath": "ai/scheduling-comparison.md",
@@ -5417,7 +5449,9 @@
               "level": 3
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-ai-volcano"
+          ],
           "prevId": "ai/trainer/examples/pytorch-megatron/volcano",
           "nextId": null,
           "sourcePath": "ai/volcano/README.md",
@@ -5580,7 +5614,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-repo-harbor"
+          ],
           "prevId": "repo/dragonfly",
           "nextId": "repo/pypi",
           "sourcePath": "repo/harbor/README.md",
@@ -5780,7 +5816,9 @@
               "level": 3
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-repo-registry"
+          ],
           "prevId": "repo/pypi",
           "nextId": "repo/registry/benchmark",
           "sourcePath": "repo/registry/README.md",
@@ -6077,7 +6115,9 @@
           "underConstruction": false,
           "hasMermaid": false,
           "sections": [],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-o11y-vm"
+          ],
           "prevId": "o11y/logs/vl",
           "nextId": null,
           "sourcePath": "o11y/vm/README.md",
@@ -6639,7 +6679,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-db-kubeblocks-day0"
+          ],
           "prevId": "db/kubeblocks",
           "nextId": "db/kubeblocks/kbcli-0.9.3/day-1-mysql",
           "sourcePath": "db/kubeblocks/kbcli-0.9.3/day-0-kubeblocks.md",
@@ -6979,7 +7021,9 @@
               "level": 2
             }
           ],
-          "quizIds": [],
+          "quizIds": [
+            "quiz-db-redis"
+          ],
           "prevId": "db/kubeblocks/kubeblocks-0.9.3",
           "nextId": "db/tikv",
           "sourcePath": "db/redis/README.md",
@@ -7702,5 +7746,138 @@
       ]
     }
   ],
-  "quizzes": []
+  "quizzes": [
+    {
+      "id": "quiz-k8s-kubespray",
+      "lessonId": "k8s/kubespray",
+      "title": "Kubespray 部署要点",
+      "questionCount": 3
+    },
+    {
+      "id": "quiz-k8s-client",
+      "lessonId": "k8s/client",
+      "title": "kubectl 与客户端工具",
+      "questionCount": 3
+    },
+    {
+      "id": "quiz-k8s-rbac",
+      "lessonId": "k8s/sa-management",
+      "title": "ServiceAccount 与 RBAC",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-base-spegel",
+      "lessonId": "base/spegel",
+      "title": "Spegel 镜像 P2P 分发",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-base-nfd",
+      "lessonId": "base/nfd",
+      "title": "Node Feature Discovery",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-network-cilium",
+      "lessonId": "network/cilium",
+      "title": "Cilium CNI",
+      "questionCount": 4
+    },
+    {
+      "id": "quiz-network-ingress",
+      "lessonId": "network/istio/ingress",
+      "title": "Kubernetes Ingress",
+      "questionCount": 3
+    },
+    {
+      "id": "quiz-network-metallb",
+      "lessonId": "network/metallb",
+      "title": "MetalLB",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-network-cert-manager",
+      "lessonId": "network/cert-manager",
+      "title": "cert-manager 证书管理",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-storage-local",
+      "lessonId": "storage/local-storage",
+      "title": "本地存储",
+      "questionCount": 1
+    },
+    {
+      "id": "quiz-storage-snapshot",
+      "lessonId": "storage/volumesnapshots",
+      "title": "卷快照",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-storage-cephadm-1",
+      "lessonId": "storage/cephadm/1-deploy-ceph-cluster",
+      "title": "Cephadm 部署 Ceph 集群",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-storage-gpfs-concept",
+      "lessonId": "storage/gpfs/day-0-concept",
+      "title": "GPFS 核心概念",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-ai-gpu-operator",
+      "lessonId": "ai/gpu-operator",
+      "title": "GPU Operator",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-ai-kueue",
+      "lessonId": "ai/kueue",
+      "title": "Kueue 队列管理",
+      "questionCount": 3
+    },
+    {
+      "id": "quiz-ai-volcano",
+      "lessonId": "ai/volcano",
+      "title": "Volcano 批调度",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-ai-scheduling-comparison",
+      "lessonId": "ai/scheduling-comparison",
+      "title": "批处理调度选型",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-o11y-vm",
+      "lessonId": "o11y/vm",
+      "title": "VictoriaMetrics",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-repo-harbor",
+      "lessonId": "repo/harbor",
+      "title": "Harbor 镜像仓库",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-repo-registry",
+      "lessonId": "repo/registry",
+      "title": "Docker Registry",
+      "questionCount": 1
+    },
+    {
+      "id": "quiz-db-kubeblocks-day0",
+      "lessonId": "db/kubeblocks/kbcli-0.9.3/day-0-kubeblocks",
+      "title": "KubeBlocks 简介",
+      "questionCount": 2
+    },
+    {
+      "id": "quiz-db-redis",
+      "lessonId": "db/redis",
+      "title": "Redis 上 K8s",
+      "questionCount": 2
+    }
+  ]
 }

@@ -5,7 +5,7 @@
  *   public/content/lessons/<module>/<slug>.html   课程正文（构建期 Shiki 高亮）
  *   public/content/images/<hash>-<name>           被引用的图片
  *   src/content/generated/manifest.json           课程清单（打包导入）
- *   src/content/generated/quizzes.client.json     测验题面（无答案）
+ *   src/content/generated/quiz-questions.json     测验题面（无答案）
  *   src/content/generated/quiz-answers.json       测验答案（仅服务端引用）
  *   scripts/content-report.json                   构建报告（验收门）
  */
@@ -522,8 +522,14 @@ async function main() {
     questions: q.questions.map(stripAnswer),
   }));
   fs.writeFileSync(
-    path.join(GENERATED, "quizzes.client.json"),
+    path.join(GENERATED, "quiz-questions.json"),
     JSON.stringify(clientQuizzes, null, 2),
+  );
+
+  // 服务端全量题库（含答案与解析，仅 src/server 引用）
+  fs.writeFileSync(
+    path.join(GENERATED, "quizzes.server.json"),
+    JSON.stringify(validQuizzes, null, 2),
   );
 
   // 服务端答案（仅 src/server 引用）
@@ -546,11 +552,23 @@ async function main() {
   }
   fs.writeFileSync(path.join(GENERATED, "quiz-answers.json"), JSON.stringify(answers, null, 2));
 
-  // 断言：客户端产物不含答案字段
+  // 断言：客户端产物不含答案字段（order 题的打乱 items 是题面，允许存在）
   const clientStr = JSON.stringify(clientQuizzes);
-  for (const field of ['"answer"', '"answers"', '"accepts"', '"items"']) {
+  for (const field of ['"answer"', '"answers"', '"accepts"']) {
     if (clientStr.includes(field)) {
-      error(`quizzes.client.json 泄漏答案字段 ${field}`);
+      error(`quiz-questions.json 泄漏答案字段 ${field}`);
+    }
+  }
+  for (const q of clientQuizzes) {
+    for (const question of q.questions) {
+      if (question.type === "order") {
+        const original = validQuizzes
+          .find((vq) => vq.id === q.id)!
+          .questions.find((vq) => vq.type === "order")!.items;
+        if (JSON.stringify(question.items) === JSON.stringify(original)) {
+          error(`测验 ${q.id} 的 order 题打乱后仍为原序（答案泄漏）`);
+        }
+      }
     }
   }
 
@@ -660,7 +678,7 @@ function stripAnswer(q: Quiz["questions"][number]) {
   }
 }
 
-/** 确定性打乱（order 题）：以 prompt 为种子，保证多次构建产物稳定 */
+/** 确定性打乱（order 题）：以 prompt 为种子，保证多次构建产物稳定；绝不等于原序 */
 function shuffle(items: string[], seedText: string): string[] {
   let seed = [...seedText].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7);
   const arr = [...items];
@@ -669,6 +687,8 @@ function shuffle(items: string[], seedText: string): string[] {
     const j = seed % (i + 1);
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+  // 兜底：若打乱后恰为原序，轮转一位
+  if (arr.every((v, i) => v === items[i])) arr.push(arr.shift()!);
   return arr;
 }
 

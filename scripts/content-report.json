@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-21T08:33:27.339Z",
+  "generatedAt": "2026-08-21T09:15:04.542Z",
   "refRepo": "/Users/wutz/Projects/scclabs/k8s-in-action",
   "discoveredFiles": 188,
   "lessons": 0,
   "skillDuplicatesSkipped": 6,
   "imagesCopied": 29,
   "fenceFixes": 855,
-  "quizzes": 0,
+  "quizzes": 22,
   "paths": 8,
   "warnings": [
     "SKILL.md 未与同级 README 去重，按独立课程收录: ai/rbg/SKILL.md",
