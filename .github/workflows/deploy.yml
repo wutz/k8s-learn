@@ -32,6 +32,16 @@ jobs:
       - name: Typecheck
         run: pnpm exec tsc --noEmit
 
-      - run: pnpm exec wrangler deploy
+      - name: Check deploy credential
+        id: cred
+        run: echo "has_token=${{ secrets.CLOUDFLARE_API_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        if: steps.cred.outputs.has_token == 'true'
+        run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Skip notice
+        if: steps.cred.outputs.has_token != 'true'
+        run: echo "未配置 CLOUDFLARE_API_TOKEN secret，跳过部署（本地可用 pnpm run deploy）"
