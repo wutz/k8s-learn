@@ -1,0 +1,177 @@
+<h1 id="rook-ceph"><a href="https://rook.io/">Rook Ceph</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#rook-ceph">#</a></h1>
+<h2 id="基本概念">基本概念<a class="heading-anchor" aria-hidden tabindex="-1" href="#基本概念">#</a></h2>
+<p><a href="https://www.redbooks.ibm.com/abstracts/redp5721.html">Ceph 基本概念与架构</a></p>
+<h2 id="准备">准备<a class="heading-anchor" aria-hidden tabindex="-1" href="#准备">#</a></h2>
+<ul>
+<li>至少 3 台机器，每台至少插入 1 块本地盘</li>
+<li>推荐额外配置 1 条网络用于集群内数据复制, 可以极大提升存储性能
+<ul>
+<li>如果只有 1 条网络，则移除 <code>rook-ceph-cluster</code> 配置中的 <code>cephClusterSpec.network</code></li>
+<li>如果有 2 条网络，根据实际的宿主机网络设置 <code>public</code> 和 <code>cluster</code> 网段</li>
+</ul>
+</li>
+<li>为存储节点打上额外 label, 即只有这些节点会部署 rook 集群</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node-role.kubernetes.io/storage=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node-role.kubernetes.io/storage=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-3</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node-role.kubernetes.io/storage=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node-role.kubernetes.io/storage=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span></code></pre>
+<h2 id="部署-operator">部署 Operator<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-operator">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> operator/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待 operator 就绪</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app=rook-ceph-operator</span></span></code></pre>
+<h2 id="部署-cephcluster">部署 CephCluster<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-cephcluster">#</a></h2>
+<p>根据实际情况修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/rook/cluster/cluster.yaml">cluster/patch.yaml</a> 中的 public 和 cluster 网段</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 CephCluster</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 CephCluster 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cephclusters</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 CephCluster 详细信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> describe</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cephcluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span></span></code></pre>
+<h2 id="安装-kubectl-rook-ceph-用于运维"><a href="https://github.com/rook/kubectl-rook-ceph">安装 kubectl-rook-ceph 用于运维</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#安装-kubectl-rook-ceph-用于运维">#</a></h2>
+<ol>
+<li>安装 <a href="https://krew.sigs.k8s.io/docs/user-guide/setup/install/">krew</a></li>
+<li>安装 kubectl-rook-ceph 执行 <code>kubectl krew install rook-ceph</code></li>
+<li>使用 <code>kubectl rook-ceph ceph -s</code> 命令查看集群状态</li>
+</ol>
+<blockquote>
+<p>也可以部署 toolbox <code>kubectl apply -k toolbox/</code> 然后登录 <code>kubectl exec -it rook-ceph-tools-xxx-xxx bash</code> 执行 <code>ceph</code> 管理工具</p>
+</blockquote>
+<h2 id="排错">排错<a class="heading-anchor" aria-hidden tabindex="-1" href="#排错">#</a></h2>
+<ul>
+<li><a href="https://rook.io/docs/rook/latest-release/Troubleshooting/ceph-common-issues/?h=osd+prepare#solution_4">查看 osd 数量是否符合预期</a></li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 osd 数量是否符合预期</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tree</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> po</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 osd 准备日志，找到未加入 osd 原因</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app=rook-ceph-osd-prepare</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-osd-prepare-xxx-xxx</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> provision</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重启 operator 触发重新发现 osd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-operator</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">或者执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> operator</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span></span></code></pre>
+<p>通常 osd 未加入是磁盘或者之前集群残留，参见 <a href="#%E9%94%80%E6%AF%81%E9%9B%86%E7%BE%A4">销毁集群</a> 章节</p>
+<h2 id="配置-cephcluster">配置 CephCluster<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置-cephcluster">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## ceph version >= 20.2, 开启 Fast EC 且设置 stripe_unit=16384 提升性能</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> global</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd_pool_default_flag_ec_optimizations</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> global</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd_pool_erasure_code_stripe_unit</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 16384</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 查看配置是否生效</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dump</span></span></code></pre>
+<h2 id="创建-rbd-块存储"><a href="https://rook.io/docs/rook/latest-release/CRDs/Block-Storage/ceph-block-pool-crd/">创建 RBD 块存储</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#创建-rbd-块存储">#</a></h2>
+<ul>
+<li>
+<p>创建 rbd 存储池和 storageclass</p>
+<ul>
+<li>每个租户需要使用独立的 rbd 部署</li>
+<li>复制示例 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/rook/rbd/block-ceph.yaml">rbd/block-ceph.yaml</a>, 修改所有 <code>block-ceph</code> 为实际的名称</li>
+<li>根据实际情况修改 <code>CephBlockPool.spec.deviceClass</code> 为 <code>hdd</code> 或 <code>ssd</code> 等</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rbd/block-ceph.yaml</span></span></code></pre>
+<ul>
+<li>
+<p>测试验证 RBD 工作正常</p>
+<p>测试验证 RBD 工作正常, 首先修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/rook/rbd/tests/pvc.yaml">rbd/tests/pvc.yaml</a> 中的 <code>storageClassName</code> 为实际的名称</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rbd/tests/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csirbd-demo-pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span></code></pre>
+<h2 id="创建-cephfs-文件系统"><a href="https://rook.io/docs/rook/latest-release/CRDs/Shared-Filesystem/ceph-filesystem-crd/">创建 CephFS 文件系统</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#创建-cephfs-文件系统">#</a></h2>
+<ul>
+<li>
+<p>创建 cephfs 文件系统和 storageclass</p>
+<ul>
+<li>每个租户需要使用独立的 cephfs 部署</li>
+<li>复制示例 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/rook/cephfs/shared-ceph.yaml">cephfs/shared-ceph.yaml</a>, 修改所有 <code>shared-ceph</code> 为实际的名称</li>
+<li><code>metadataPool</code>
+<ul>
+<li><code>deviceClass</code> 必须配置为 <code>ssd</code></li>
+<li><code>replicated.size</code> 独立存储集群配置为 <code>3</code>, 融合存储集群配置为 <code>4</code></li>
+</ul>
+</li>
+<li><code>dataPools</code>
+<ul>
+<li><code>name: replicated</code>
+<ul>
+<li><code>replicated.size</code> 独立存储集群配置为 <code>3</code>, 融合存储集群配置为 <code>4</code></li>
+</ul>
+</li>
+<li><code>name: erasurecoded</code>
+<ul>
+<li><code>deviceClass</code> 根据实际情况选择 <code>hdd</code> 或 <code>ssd</code></li>
+<li><code>erasurecoded.dataChunks</code> 配置为 <code>4</code></li>
+<li><code>erasurecoded.codingChunks</code> 独立存储集群配置为 <code>2</code>, 融合存储集群配置为 <code>3</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>生产环境 <code>metadataServer.resources.memory</code> 至少 <code>32Gi</code>, 其与热元数据数量相关, 每个元数据大约占用内存 <code>3k</code> 大小，如果元数据缓存大小不足则会频繁回收内存造成严重性能下降</li>
+<li>缺省使用纠删码其得盘率更高，如果需要更高性能则可以使用副本，注释 <code>dataPools.erasurecoded</code> 整段配置, 并修改 <code>StorageClass.parameters.pool</code> 为 <code>shared-ceph-replicated</code></li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cephfs/shared-ceph.yaml</span></span></code></pre>
+<ul>
+<li>
+<p>测试验证 CephFS 工作正常</p>
+<p>测试验证 CephFS 工作正常, 首先修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/rook/cephfs/tests/pvc.yaml">cephfs/tests/pvc.yaml</a> 中的 <code>storageClassName</code> 为实际的名称</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cephfs/tests/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csicephfs-demo-pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span></code></pre>
+<h2 id="重要配置">重要配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#重要配置">#</a></h2>
+<ul>
+<li>pg-autoscaler 不工作问题，这会造成性能不能充分利用</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看到所有 Pool 的 PGS 数量为 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> df</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 除第一个 replicated_rule 外，获取第二个值例如 block-ceph</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crush</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rule</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 Pool .mgr 的 Crush Rule</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .mgr</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crush_rule</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> block-ceph</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 Pool 的 Autoscale 状态, 每个 Pool 的 PGS 至少为 32</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> autoscale-status</span></span></code></pre>
+<ul>
+<li>设置数据均衡优先</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd_mclock_override_recovery_settings</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd_max_backfills</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 16</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dump</span></span></code></pre>
+<h2 id="使用-ceph-dashboard"><a href="https://rook.io/docs/rook/latest-release/Storage-Configuration/Monitoring/ceph-dashboard/">使用 Ceph Dashboard</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-ceph-dashboard">#</a></h2>
+<p>通常不直接使用 Ceph Dashboard 管理集群而是使用 rook, Ceph Dashboard 作为一个 GUI 查看工具</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> port-forward</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc/rook-ceph-mgr-dashboard</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 8443</span></span></code></pre>
+<p>访问 <a href="https://localhost:8443">https://localhost:8443</a> 即可, 用户名为 <code>admin</code>, 密码使用下面命令获取</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-dashboard-password</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath="{['data']['password']}"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> base64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --decode</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span></span></code></pre>
+<h2 id="销毁集群"><a href="https://rook.io/docs/rook/latest-release/Getting-Started/ceph-teardown/">销毁集群</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#销毁集群">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 销毁集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> destroy-cluster</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 输入 yes-really-destroy-cluster 后开始执行</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除 operator</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> operator/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除宿主机残留</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-[1-4]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'rm -rf /var/lib/rook'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 抹除磁盘,下面方法任选其一</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-[1-4]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'sgdisk --zap-all /dev/xxx'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-[1-4]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'dd if=/dev/zero bs=1M count=100 oflag=direct,dsync of=/dev/xxx'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ssd 使用 blkdiscard 抹除而非 dd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-[1-4]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'blkdiscard /dev/xxx'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果仍然无法抹除，可以使用 ceph-volume</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph-volume</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> lvm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zap</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/xxx</span></span></code></pre>
+<h2 id="日常维护">日常维护<a class="heading-anchor" aria-hidden tabindex="-1" href="#日常维护">#</a></h2>
+<p><a href="/lessons/storage/rook/day-2">Rook 日常维护</a></p>

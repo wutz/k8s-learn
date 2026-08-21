@@ -1,0 +1,33 @@
+<h1 id="kgateway">KGateway<a class="heading-anchor" aria-hidden tabindex="-1" href="#kgateway">#</a></h1>
+<h2 id="概述">概述<a class="heading-anchor" aria-hidden tabindex="-1" href="#概述">#</a></h2>
+<p>KGateway 是一个面向 Kubernetes 的云原生 API 网关，提供高级流量管理、路由和推理功能。此技能部署 KGateway，支持 Gateway API 标准和 AI 推理扩展。</p>
+<h2 id="功能特性">功能特性<a class="heading-anchor" aria-hidden tabindex="-1" href="#功能特性">#</a></h2>
+<ul>
+<li><strong>Gateway API 支持</strong>：完全符合 Kubernetes Gateway API 标准</li>
+<li><strong>推理扩展</strong>：通过 Gateway API Inference Extension 为 AI/ML 推理工作负载提供专业支持</li>
+<li><strong>Agent 网关</strong>：内置 AI 代理路由和管理支持</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="验证">验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证">#</a></h2>
+<h3 id="测试功能">测试功能<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试功能">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建测试 Gateway</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">apiVersion: gateway.networking.k8s.io/v1beta1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kind: Gateway</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">metadata:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  name: test-gateway</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  namespace: kgateway-system</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">spec:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  gatewayClassName: kgateway</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  listeners:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - name: http</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    protocol: HTTP</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    port: 80</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证 Gateway 创建</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kgateway-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test-gateway</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 移除 KGateway 和所有组件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

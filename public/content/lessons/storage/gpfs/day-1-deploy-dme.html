@@ -1,0 +1,193 @@
+<h1 id="部署-gpfs">部署 GPFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-gpfs">#</a></h1>
+<h2 id="准备">准备<a class="heading-anchor" aria-hidden tabindex="-1" href="#准备">#</a></h2>
+<ol>
+<li>访问 <a href="https://www.ibm.com/docs/en/storage-scale?topic=STXKQY/gpfsclustersfaq.html">https://www.ibm.com/docs/en/storage-scale?topic=STXKQY/gpfsclustersfaq.html</a> 检查使用的 GPFS 版本支持 OS 和 MOFED (如果环境配置 IB/RoCE) 版本</li>
+<li>配置 <code>/etc/hosts</code> 其中每个节点使用格式 <code>&#x3C;ip> &#x3C;fqdn> &#x3C;alias></code></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/hosts</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">192.168.1.101   mn01.example.com    mn01</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">192.168.1.102   mn02.example.com    mn02</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">192.168.1.103   mn03.example.com    mn03</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">192.168.2.101   gn001.example.com   gn001</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">192.168.2.102   gn002.example.com   gn002</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span></code></pre>
+<ol start="3">
+<li>配置节点间 SSH 免密</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-keygen</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-copy-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mn01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-copy-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mn02</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-copy-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mn03</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-copy-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gn001</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh-copy-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gn002</span></span></code></pre>
+<ol start="4">
+<li>安装 pdsh</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pdsh</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/pdsh.sh</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">export PDSH_RCMD_TYPE=ssh</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/pdsh.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">mn[01-03]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn[001-002]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> PDSH_SSH_ARGS_APPEND</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"-o StrictHostKeyChecking=no"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^sn</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hostname</span></span></code></pre>
+<ol start="5">
+<li>关闭 selinux &#x26; firewalld</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/RockyLinux</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'systemctl disable firewalld --now'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config'</span></span></code></pre>
+<ol start="6">
+<li>配置 ntp 和时区</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/RockyLinux</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'timedatectl set-timezone Asia/Shanghai'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'yum install -y chrony'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'sed -i 's/^pool.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ntp.aliyun.com</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> iburst/' /etc/chrony.conf'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'systemctl enable --now chronyd'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'chronyc sources'</span></span></code></pre>
+<ol start="7">
+<li>更新 kernel 到最新版本</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/RockyLinux</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'yum update -y'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Ubuntu</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'apt update &#x26;&#x26; apt upgrade -y'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重启使用新 kernel</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> reboot</span></span></code></pre>
+<ol start="8">
+<li>安装 MOFED 驱动并重启</li>
+</ol>
+<h2 id="安装软件包"><a href="https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=isslndp-manually-installing-storage-scale-software-packages-linux-nodes">安装软件包</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#安装软件包">#</a></h2>
+<h3 id="手动安装">手动安装<a class="heading-anchor" aria-hidden tabindex="-1" href="#手动安装">#</a></h3>
+<ol>
+<li>
+<p><code>./Spectrum_Scale_Data_Management-5.x.y.z-x86_64-Linux-install</code> 输出 <code>1</code> 接受即可</p>
+</li>
+<li>
+<p>安装包</p>
+<ul>
+<li>RHEL/RockyLinux</li>
+</ul>
+</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/gpfs_rpms</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Access 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.base</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.gpl</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.license.da</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.gskit</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.msg</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.docs</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Management 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.base</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.gpl</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.license.dm</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.gskit</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.docs</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.msg</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.adv</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.crypto</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span></code></pre>
+<pre><code>* Ubuntu
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/gpfs_debs</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Access 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.base</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.gpl</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.license.da</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.gskit</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.msg</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.docs</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Management 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.base</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.gpl</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.license.dm</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.gskit</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.msg</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.docs</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.adv</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.crypto</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span></span></code></pre>
+<ol start="3">
+<li>构建 <strong>GPFS portability layer</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rpm-build</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmbuildgpl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build-package</span></span></code></pre>
+<pre><code>* RHEL/RockyLinux   
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">rpm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -ivh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /root/rpmbuild/RPMS/x86_64/gpfs.gplbin</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">rpm</span></span></code></pre>
+<pre><code>* Ubuntu
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">dpkg</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/deb/gpfs.gplbin</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">deb</span></span></code></pre>
+<ol start="4">
+<li>设置环境变量</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/gpfs.sh</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">export PATH=/usr/lpp/mmfs/bin:$PATH</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/gpfs.sh</span></span></code></pre>
+<ol start="5">
+<li>
+<p>软件包拷贝到其他节点重复 2-4 步骤</p>
+<ul>
+<li>RHEL/RockyLinux</li>
+</ul>
+</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/gpfs_rpms</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /root/rpmbuild/RPMS/x86_64/gpfs.gplbin</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">rpm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/gpfs_rpms</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Access 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'cd /tmp/gpfs_rpms &#x26;&#x26; yum -y install gpfs.base*.rpm gpfs.gpl*.rpm gpfs.license.da*.rpm gpfs.gskit*.rpm gpfs.docs*.rpm gpfs.msg*.rpm'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Management 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'cd /tmp/gpfs_rpms &#x26;&#x26; yum -y install gpfs.base*.rpm gpfs.gpl*.rpm gpfs.license.dm*.rpm gpfs.gskit*.rpm gpfs.docs*.rpm gpfs.msg*.rpm gpfs.adv*.rpm gpfs.crypto*.rpm'</span></span></code></pre>
+<pre><code>* Ubuntu
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/gpfs_debs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/deb/gpfs.gplbin</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">deb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/gpfs_debs</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Access 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'cd /tmp/gpfs_debs &#x26;&#x26; apt -y install ./gpfs.base*.deb ./gpfs.gpl*.deb ./gpfs.license.da*.deb ./gpfs.gskit*.deb ./gpfs.msg*.deb ./gpfs.docs*.deb'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Data Management 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'cd /tmp/gpfs_debs &#x26;&#x26; apt -y install ./gpfs.base*.deb ./gpfs.gpl*.deb ./gpfs.license.dm*.deb ./gpfs.gskit*.deb ./gpfs.msg*.deb ./gpfs.docs*.deb ./gpfs.adv*.deb ./gpfs.crypto*.deb'</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/gpfs.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/</span></span></code></pre>
+<h2 id="创建集群并启动">创建集群并启动<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建集群并启动">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NodeList</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn001:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn002:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn003:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn004:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn005:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn006:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn007:quorum-manager</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn008</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gn009</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmcrcluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NodeList</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -C</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs2.example.com</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchlicense</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> server</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --accept</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gn001,gn002,gn003,gn004,gn005,gn006,gn007</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchlicense</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --accept</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gn008,gn009</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看集群配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlscluster</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmstartup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看集群状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmgetstate</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置开机自启动</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> autoload=yes</span></span></code></pre>
+<h2 id="配置网络">配置网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置网络">#</a></h2>
+<p>参见 <a href="/lessons/storage/gpfs/day-0-network">GPFS 网络</a></p>
+<h2 id="性能调优">性能调优<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能调优">#</a></h2>
+<p>参见 <a href="/lessons/storage/gpfs/day-1-tunning">GPFS 性能调优</a></p>
+<h2 id="远程挂载存储集群的文件系统">远程挂载存储集群的文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#远程挂载存储集群的文件系统">#</a></h2>
+<p>在存储集群上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取客户端集群的 GPFS 公钥</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gn001:/var/mmfs/ssl/id_rsa.pub</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加客户端集群的 GPFS 公钥</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id_rsa.pub</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 授予客户端集群对 fs1 文件系统的读写权限</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> grant</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rw</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取存储集群的 GPFS 公钥</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn001:/var/mmfs/ssl/id_rsa.pub</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加存储集群的 GPFS 公钥与连接节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmremotecluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> storage1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn001,sn002,sn003,sn004</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id_rsa.pub</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加远程文件系统 fs1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmremotefs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -C</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> storage1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -T</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /fs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 挂载远程文件系统 fs1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmmount</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>

@@ -1,0 +1,140 @@
+<h1 id="仓库服务">仓库服务<a class="heading-anchor" aria-hidden tabindex="-1" href="#仓库服务">#</a></h1>
+<h2 id="容器镜像仓库">容器镜像仓库<a class="heading-anchor" aria-hidden tabindex="-1" href="#容器镜像仓库">#</a></h2>
+<ul>
+<li>部署 <a href="/lessons/repo/registry">Registry</a> 提供容器镜像服务, 作为缺省镜像仓库</li>
+<li>[备选] 部署 <a href="/lessons/repo/harbor">Harbor</a> 提供容器镜像服务</li>
+</ul>
+<blockquote>
+<p>两者部署其一即可, 不需要同时部署.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Registry (缺省)</th>
+<th>Harbor (备选)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>组件构成</td>
+<td><code>registry:3.0.0</code> + <code>docker-registry-ui</code>, 单 Deployment + 单 PVC</td>
+<td>core / jobservice / portal / registry + PostgreSQL + Redis</td>
+</tr>
+<tr>
+<td>认证</td>
+<td>htpasswd Basic Auth, 单一账号池</td>
+<td>用户 / 项目 / 角色 RBAC, 可对接 LDAP, OIDC</td>
+</tr>
+<tr>
+<td>多租户</td>
+<td>无项目隔离, 登录账号默认可 pull / push / delete</td>
+<td>项目级权限与配额</td>
+</tr>
+<tr>
+<td>上游镜像代理</td>
+<td>不支持, 需要逐个手工同步镜像</td>
+<td>支持 proxy cache, 可代理 <code>docker.io</code> / <code>gcr.io</code> / <code>nvcr.io</code> 等</td>
+</tr>
+<tr>
+<td>漏洞扫描 / 签名</td>
+<td>无</td>
+<td>支持 Trivy 扫描与镜像签名 (模板中 <code>trivy.enabled</code> 缺省关闭)</td>
+</tr>
+<tr>
+<td>仓库间复制</td>
+<td>无</td>
+<td>支持, 可用于跨机房分发</td>
+</tr>
+<tr>
+<td>保留策略 / 审计日志</td>
+<td>无</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>资源开销</td>
+<td>低</td>
+<td>高, 生产环境建议外接 PostgreSQL 与 Redis</td>
+</tr>
+</tbody>
+</table>
+<p>缺省选 Registry: 单集群内部使用, 账号可控, 只需要 push / pull / delete.</p>
+<p>换成 Harbor 的场景:</p>
+<ul>
+<li>需要多团队或多项目隔离与 RBAC, 并对接 LDAP / OIDC 统一认证</li>
+<li>需要上游镜像代理缓存 (proxy cache), 替代逐个手工同步上游镜像</li>
+<li>需要漏洞扫描, 镜像签名, 保留策略或跨机房复制</li>
+<li>需要统一托管 Helm Chart 等 OCI 制品</li>
+</ul>
+<h2 id="镜像-p2p">镜像 P2P<a class="heading-anchor" aria-hidden tabindex="-1" href="#镜像-p2p">#</a></h2>
+<ul>
+<li>缺省在 <a href="/lessons/base">base</a> 阶段部署 <a href="/lessons/base/spegel">Spegel</a> 提供镜像 P2P 服务</li>
+<li>[备选] 部署 <a href="/lessons/repo/dragonfly">Dragonfly</a> 提供镜像 P2P 服务</li>
+</ul>
+<blockquote>
+<p>两者部署其一即可. 如果 base 阶段已部署 Spegel, 改用 Dragonfly 前先卸载 Spegel.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Spegel (缺省)</th>
+<th>Dragonfly (备选)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>部署位置</td>
+<td><a href="/lessons/base/spegel">base/spegel</a>, 随基础服务一起部署</td>
+<td><a href="/lessons/repo/dragonfly">repo/dragonfly</a>, 按需单独部署</td>
+</tr>
+<tr>
+<td>组件构成</td>
+<td>单 DaemonSet</td>
+<td>manager / scheduler / seed client / client + MySQL + Redis</td>
+</tr>
+<tr>
+<td>原理</td>
+<td>节点间互为镜像源, 复用 containerd 本地已有镜像层, 无中心节点</td>
+<td>独立 P2P 网络, 由 seed client 统一回源</td>
+</tr>
+<tr>
+<td>支持的运行时</td>
+<td>仅 containerd</td>
+<td>containerd, Docker, CRI-O 等</td>
+</tr>
+<tr>
+<td>预热 (preheat)</td>
+<td>不支持, 只能命中集群内已拉取过的层</td>
+<td>支持, 首次拉取也能加速</td>
+</tr>
+<tr>
+<td>分发对象</td>
+<td>容器镜像</td>
+<td>容器镜像, 以及模型权重, 数据集等任意文件</td>
+</tr>
+<tr>
+<td>节点侧依赖</td>
+<td>kubespray 设置 <code>containerd_discard_unpacked_layers: false</code></td>
+<td>由 <code>client.dfinit</code> 改写节点 containerd 配置</td>
+</tr>
+<tr>
+<td>资源开销</td>
+<td>低</td>
+<td>高, 生产环境建议外接 MySQL 与 Redis</td>
+</tr>
+</tbody>
+</table>
+<p>缺省选 Spegel: 集群使用 containerd, 加速的是同一镜像在多节点间的重复拉取.</p>
+<p>换成 Dragonfly 的场景:</p>
+<ul>
+<li>需要预热: 大规模并发拉取<strong>新</strong>镜像时首次拉取也要加速, 例如推理服务扩容或训练任务启动</li>
+<li>需要分发非镜像文件, 例如模型权重, 数据集</li>
+<li>节点运行时不是 containerd</li>
+<li>需要跨集群或跨机房的 P2P 调度与流量统计</li>
+</ul>
+<h2 id="语言包镜像">语言包镜像<a class="heading-anchor" aria-hidden tabindex="-1" href="#语言包镜像">#</a></h2>
+<ul>
+<li>部署 <a href="/lessons/repo/pypi">PyPI</a> 提供 Python 包服务</li>
+<li>部署 <a href="/lessons/repo/conda">Conda</a> 提供 Conda 包服务</li>
+</ul>

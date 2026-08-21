@@ -1,0 +1,19 @@
+<h1 id="日常运维">日常运维<a class="heading-anchor" aria-hidden tabindex="-1" href="#日常运维">#</a></h1>
+<h2 id="在线扩容节点">在线扩容节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#在线扩容节点">#</a></h2>
+<p>首先需要检查新增节点网络是否与已有客户端节点网络互通</p>
+<ul>
+<li>
+<p>cephfs</p>
+<p>通过检查 mds 已经挂载的 client 获取正在使用的节点 ip 列表</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span></span></code></pre>
+<p>获取最后一行 mds 服务名称，例如 <code>mds.cfs01.zw1mds01.zfwrmx</code></p>
+<p>然后查询 mds 中当前挂载的 client 列表</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tell</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01.zw1mds01.zfwrmx</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> addr</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -oP</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '\d{1,3}(\.\d{1,3}){3}'</span></span></code></pre>
+<p>ceph</p>
+<p>最后在新增节点上执行 ping</p>
+<ul>
+<li>上述获取的 client ip 列表</li>
+<li>已有 ceph 集群的节点 ip 列表</li>
+</ul>

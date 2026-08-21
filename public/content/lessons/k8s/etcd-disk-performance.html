@@ -1,0 +1,191 @@
+<h1 id="etcd-磁盘性能验证k8s-集群部署前">etcd 磁盘性能验证（K8s 集群部署前）<a class="heading-anchor" aria-hidden tabindex="-1" href="#etcd-磁盘性能验证k8s-集群部署前">#</a></h1>
+<p>etcd 的 Raft 协议要求每次写提案必须 fsync 到磁盘才能确认。磁盘慢会直接导致心跳超时、频繁选举、集群卡顿。</p>
+<hr>
+<h2 id="硬件要求">硬件要求<a class="heading-anchor" aria-hidden tabindex="-1" href="#硬件要求">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>磁盘类型</td>
+<td>NVMe SSD 优先，SATA SSD 可接受</td>
+</tr>
+<tr>
+<td>磁盘占用</td>
+<td>独占一块盘，不与系统盘/日志盘共享</td>
+</tr>
+<tr>
+<td>禁止使用</td>
+<td>机械盘、NAS、SAN、iSCSI、Ceph RBD、NFS</td>
+</tr>
+</tbody>
+</table>
+<p>小集群最低 50 顺序写 IOPS，大集群推荐 500+。</p>
+<blockquote>
+<p>参考: <a href="https://etcd.io/docs/v3.6/op-guide/hardware/">https://etcd.io/docs/v3.6/op-guide/hardware/</a></p>
+</blockquote>
+<hr>
+<h2 id="部署前必测wal-fsync-p99--10ms">部署前必测：WAL fsync p99 &#x3C; 10ms<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署前必测wal-fsync-p99--10ms">#</a></h2>
+<p>这是唯一能在部署前用 fio 独立验证的硬指标。测不过不要上线。</p>
+<h3 id="测试命令">测试命令<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试命令">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">fio</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --rw=write</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --ioengine=sync</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --fdatasync=1</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --directory=/var/lib/etcd</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --size=22m</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bs=2300</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --name=etcd-test</span></span></code></pre>
+<blockquote>
+<p>fio 版本需 >= 3.5（旧版不报 fdatasync 百分位）</p>
+</blockquote>
+<p>参数说明：</p>
+<ul>
+<li><code>--fdatasync=1</code> — 模拟 etcd 每次写 WAL 后 fsync 的行为，这是核心</li>
+<li><code>--bs=2300</code> — 匹配 etcd WAL 条目典型大小（可用 <code>strace -p $(pgrep etcd) -e write</code> 确认实际值）</li>
+<li><code>--directory</code> — 必须指向 etcd 实际使用的存储路径</li>
+<li><code>--size=22m</code> — 产生约 10^4 个样本，保证 p99 统计可靠</li>
+</ul>
+<h3 id="结果判定">结果判定<a class="heading-anchor" aria-hidden tabindex="-1" href="#结果判定">#</a></h3>
+<p>看输出中 <code>sync percentiles (usec)</code> 段：</p>
+<pre><code>sync percentiles (usec):
+| 99.00th =[ 2376]    ← 2.4ms，合格
+| 99.50th =[ 9634]    ← 9.6ms，勉强
+| 99.90th =[15795]    ← 15.8ms，p99.9 不看
+</code></pre>
+<p><strong>99.00th &#x3C; 10000 usec (10ms) 即通过。</strong></p>
+<p>注意：fio 是隔离测试，实际 etcd 还有额外 I/O。fio 测出接近 10ms 说明余量不够，建议换更快的盘。</p>
+<blockquote>
+<p>参考: <a href="https://web.archive.org/web/20230930053243/https://prog.world/is-storage-speed-suitable-for-etcd-ask-fio/">https://web.archive.org/web/20230930053243/https://prog.world/is-storage-speed-suitable-for-etcd-ask-fio/</a></p>
+</blockquote>
+<hr>
+<h2 id="部署后监控指标">部署后监控指标<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署后监控指标">#</a></h2>
+<p>WAL fsync 达标上线后，还需持续关注以下指标：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>目标</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>etcd_disk_wal_fsync_duration_seconds</code> p99</td>
+<td>&#x3C; 10ms</td>
+<td>同部署前指标，运行态验证</td>
+</tr>
+<tr>
+<td><code>etcd_disk_backend_commit_duration_seconds</code> p99</td>
+<td>&#x3C; 25ms</td>
+<td>boltdb 刷盘延迟，无法部署前测试</td>
+</tr>
+<tr>
+<td><code>etcd_server_leader_changes_seen_total</code></td>
+<td>0</td>
+<td>频繁切换说明磁盘/网络有问题</td>
+</tr>
+<tr>
+<td><code>etcd_disk_wal_write_duration_seconds</code> p99</td>
+<td>&#x3C; 10ms</td>
+<td>v3.6+ 新增，覆盖 write() 系统调用延迟</td>
+</tr>
+</tbody>
+</table>
+<p>PromQL 示例：</p>
+<pre><code class="language-promql">histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m]))
+histogram_quantile(0.99, rate(etcd_disk_backend_commit_duration_seconds_bucket[5m]))
+increase(etcd_server_leader_changes_seen_total[15m])
+</code></pre>
+<blockquote>
+<p>参考: <a href="https://etcd.io/docs/v3.6/op-guide/monitoring/">https://etcd.io/docs/v3.6/op-guide/monitoring/</a></p>
+</blockquote>
+<hr>
+<h2 id="官方告警阈值">官方告警阈值<a class="heading-anchor" aria-hidden tabindex="-1" href="#官方告警阈值">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>告警</th>
+<th>条件</th>
+<th>持续</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>etcdHighFsyncDurations (warning)</td>
+<td>WAL fsync p99 > 500ms</td>
+<td>10m</td>
+</tr>
+<tr>
+<td>etcdHighFsyncDurations (critical)</td>
+<td>WAL fsync p99 > 1s</td>
+<td>10m</td>
+</tr>
+<tr>
+<td>etcdHighCommitDurations (warning)</td>
+<td>Backend commit p99 > 250ms</td>
+<td>10m</td>
+</tr>
+<tr>
+<td>etcdNoLeader (critical)</td>
+<td>无 leader</td>
+<td>1m</td>
+</tr>
+<tr>
+<td>etcdHighNumberOfLeaderChanges (warning)</td>
+<td>>= 4次/15min</td>
+<td>5m</td>
+</tr>
+</tbody>
+</table>
+<p>注意：告警阈值远高于运行目标（500ms vs 10ms），告警触发时集群已严重劣化。</p>
+<blockquote>
+<p>参考: <a href="https://raw.githubusercontent.com/etcd-io/etcd/main/contrib/mixin/alerts/alerts.libsonnet">https://raw.githubusercontent.com/etcd-io/etcd/main/contrib/mixin/alerts/alerts.libsonnet</a></p>
+</blockquote>
+<hr>
+<h2 id="常见问题">常见问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#常见问题">#</a></h2>
+<p><strong>Q: fio 测试通过但 etcd 运行后 WAL fsync 仍然高？</strong></p>
+<p>检查同节点是否有 I/O 竞争。控制平面节点不应跑 I/O 密集型负载。可用 <code>ionice -c2 -n0 -p $(pgrep etcd)</code> 提升 etcd 优先级。</p>
+<p><strong>Q: WAL fsync 正常但集群仍不稳定？</strong></p>
+<p>可能是 write() 系统调用本身慢（内核 bug），v3.6+ 查看 <code>etcd_disk_wal_write_duration_seconds</code>。案例: <a href="https://github.com/etcd-io/etcd/issues/17615">https://github.com/etcd-io/etcd/issues/17615</a></p>
+<p><strong>Q: 跨机房部署？</strong></p>
+<p>默认 heartbeat-interval=100ms、election-timeout=1000ms，跨机房需适当增大。</p>
+<hr>
+<h2 id="附录-a为什么磁盘性能对-etcd-至关重要">附录 A：为什么磁盘性能对 etcd 至关重要<a class="heading-anchor" aria-hidden tabindex="-1" href="#附录-a为什么磁盘性能对-etcd-至关重要">#</a></h2>
+<p>etcd 使用 Raft 共识协议保证分布式一致性，其核心流程是：</p>
+<ol>
+<li>客户端发起写请求</li>
+<li>Leader 将提案写入本地 WAL (Write-Ahead Log)</li>
+<li><strong>Leader 调用 fsync 将 WAL 持久化到磁盘</strong></li>
+<li>Leader 将提案发送给 Followers</li>
+<li>多数成员确认后，Leader 提交提案并响应客户端</li>
+</ol>
+<p>关键点：<strong>步骤 3 的 fsync 是同步阻塞操作</strong>，每次写请求都必须等待磁盘确认。集群中多数成员都要完成这个过程。</p>
+<p>因此磁盘延迟直接影响：</p>
+<ul>
+<li><strong>WAL fsync 慢</strong> → 写请求响应慢 → API Server 卡顿 → 整个 K8s 控制面变慢</li>
+<li><strong>WAL fsync 超过心跳间隔</strong> → Follower 认为 Leader 失效 → 触发重新选举 → 集群短暂不可用</li>
+<li><strong>频繁选举</strong> → 提案堆积 → 雪崩式劣化</li>
+</ul>
+<p>此外，etcd 还使用 boltdb (B+树) 存储数据快照，定期将内存中的变更提交到磁盘（backend commit）。这部分是周期性批量操作，延迟要求略低于 WAL fsync（25ms vs 10ms），但同样不可忽视。</p>
+<p>还有一个容易被忽略的环节：WAL 写入的 <code>write()</code> 系统调用本身（不包含 fsync）。在 etcd v3.6 之前没有专门监控这个指标，导致出现过 WAL fsync 正常但 write() 因内核 bug 而极慢的案例（etcd#17615）。v3.6+ 新增了 <code>etcd_disk_wal_write_duration_seconds</code> 指标来覆盖这个盲区。</p>
+<blockquote>
+<p>参考: <a href="https://etcd.io/docs/v3.6/op-guide/performance/">https://etcd.io/docs/v3.6/op-guide/performance/</a></p>
+</blockquote>
+<hr>
+<h2 id="附录-b参考链接">附录 B：参考链接<a class="heading-anchor" aria-hidden tabindex="-1" href="#附录-b参考链接">#</a></h2>
+<ol>
+<li>etcd 硬件推荐: <a href="https://etcd.io/docs/v3.6/op-guide/hardware/">https://etcd.io/docs/v3.6/op-guide/hardware/</a></li>
+<li>etcd 性能指南: <a href="https://etcd.io/docs/v3.6/op-guide/performance/">https://etcd.io/docs/v3.6/op-guide/performance/</a></li>
+<li>etcd 调优: <a href="https://etcd.io/docs/v3.6/tuning/">https://etcd.io/docs/v3.6/tuning/</a></li>
+<li>etcd 监控: <a href="https://etcd.io/docs/v3.6/op-guide/monitoring/">https://etcd.io/docs/v3.6/op-guide/monitoring/</a></li>
+<li>etcd 指标参考: <a href="https://etcd.io/docs/v3.6/metrics/">https://etcd.io/docs/v3.6/metrics/</a></li>
+<li>etcd 官方告警规则: <a href="https://raw.githubusercontent.com/etcd-io/etcd/main/contrib/mixin/alerts/alerts.libsonnet">https://raw.githubusercontent.com/etcd-io/etcd/main/contrib/mixin/alerts/alerts.libsonnet</a></li>
+<li>K8s 运维 etcd: <a href="https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/">https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/</a></li>
+<li>K8s HA etcd 部署: <a href="https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/setup-ha-etcd-with-kubeadm/">https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/setup-ha-etcd-with-kubeadm/</a></li>
+<li>OpenShift etcd 最佳实践: <a href="https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/scalability_and_performance/recommended-performance-and-scalability-practices-2">https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/scalability_and_performance/recommended-performance-and-scalability-practices-2</a></li>
+<li>fio 测试 etcd 磁盘 (存档): <a href="https://web.archive.org/web/20230930053243/https://prog.world/is-storage-speed-suitable-for-etcd-ask-fio/">https://web.archive.org/web/20230930053243/https://prog.world/is-storage-speed-suitable-for-etcd-ask-fio/</a></li>
+<li>etcd 内核 bug 案例 (etcd#17615): <a href="https://github.com/etcd-io/etcd/issues/17615">https://github.com/etcd-io/etcd/issues/17615</a></li>
+<li>内核 write() bug 补丁: <a href="https://lore.kernel.org/all/20220817172139.3141101-1-shakeelb@google.com/">https://lore.kernel.org/all/20220817172139.3141101-1-shakeelb@google.com/</a></li>
+<li>etcd DB 大小问题排查: <a href="https://etcd.io/blog/2023/how_to_debug_large_db_size_issue/">https://etcd.io/blog/2023/how_to_debug_large_db_size_issue/</a></li>
+</ol>

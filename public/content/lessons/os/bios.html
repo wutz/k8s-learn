@@ -1,0 +1,75 @@
+<h1 id="bios-配置">BIOS 配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#bios-配置">#</a></h1>
+<h2 id="性能">性能<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能">#</a></h2>
+<blockquote>
+<p>充分挖掘硬件性能（超频、多线程...）</p>
+</blockquote>
+<ul>
+<li>Turbo Mode：Enable</li>
+<li>Hyper-Threading [ALL]：Enable</li>
+<li>IO Directory Cache (IODC)：Auto</li>
+<li>UPI3：Enable</li>
+<li>Memory Frequency：Auto</li>
+<li>PCIe Max Read Request Size：Auto（系统内调控，不同设备不同上限）</li>
+<li>NUMA：Enabled</li>
+<li>Above 4G Decoding：Enabled （设置开启或关闭64位设备在大于4G地址空间的解码）</li>
+<li>CSM Support：Disabled （Compatibility Support Module）（UEFI）</li>
+<li>MMIO High Base：4T</li>
+<li>MMIO High Granularity Size：1024G</li>
+<li>PCIe ACSCTL：Disable</li>
+</ul>
+<h2 id="电力">电力<a class="heading-anchor" aria-hidden tabindex="-1" href="#电力">#</a></h2>
+<blockquote>
+<p>不节能，保障最大电力供应</p>
+</blockquote>
+<ul>
+<li>Power Technology：Custom</li>
+<li>Power Performance Tuning：OS Controls EBP</li>
+<li>Optimized Power Mode：Disable</li>
+<li>SpeedStep (P-States)：Enable</li>
+<li>EIST PSD Function：HW_ALL</li>
+<li>Hardware P-States：Disable</li>
+<li>Enable Monitor MWAIT：Auto</li>
+<li>CPU C1 Auto Demotion：Auto</li>
+<li>CPU C6 Report：Enable</li>
+<li>Enhanced Halt State (C1E)：Enable</li>
+<li>Package C State：Auto</li>
+<li>PCIe ASPM Support (Global)：Disable （Active State Power Management）</li>
+</ul>
+<h2 id="安全">安全<a class="heading-anchor" aria-hidden tabindex="-1" href="#安全">#</a></h2>
+<blockquote>
+<p>关闭安全策略保性能</p>
+</blockquote>
+<ul>
+<li>Enable SMX：Disable（Safer Mode Extensions）</li>
+<li>Data Scrambling for DDR5：Disable</li>
+<li>Trust Domain Extension (TDX)：Disabled</li>
+<li>KMS Security Policy：Disabled（Key Management Service）</li>
+<li>TPM Security Policy：Disabled （Trusted Platform Module）</li>
+<li>USB Security Policy：Disabled</li>
+<li>SGX Factory Reset：Disabled</li>
+<li>SW Guard Extensions (SGX)：Disabled</li>
+</ul>
+<h2 id="预取策略">预取策略<a class="heading-anchor" aria-hidden tabindex="-1" href="#预取策略">#</a></h2>
+<ul>
+<li>Hardware Prefetcher：Enable</li>
+<li>Adjacent Cache Prefetch：Enable</li>
+<li>DCU Streamer Prefetcher：Enable</li>
+<li>DCU IP Prefetcher：Enable</li>
+<li>LLC Prefetch：Enable</li>
+<li>KTI Prefetch：Auto</li>
+</ul>
+<h2 id="扩展">扩展<a class="heading-anchor" aria-hidden tabindex="-1" href="#扩展">#</a></h2>
+<blockquote>
+<p>虚拟化相关扩展</p>
+</blockquote>
+<ul>
+<li>Intel Virtualization Technology：Disable</li>
+<li>SNC：Auto</li>
+<li>Intel VT for Directed I/O (VT-T-d)：Disable</li>
+<li>SR-IOV Support：Disabled</li>
+</ul>
+<h2 id="其他">其他<a class="heading-anchor" aria-hidden tabindex="-1" href="#其他">#</a></h2>
+<ul>
+<li>Patrol Scrub：Enable at End of POST</li>
+<li>BMC: 风扇转速最大</li>
+</ul>

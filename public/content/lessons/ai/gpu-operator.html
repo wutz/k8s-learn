@@ -1,0 +1,115 @@
+<h1 id="gpu-operator">GPU Operator<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpu-operator">#</a></h1>
+<p><a href="https://github.com/NVIDIA/gpu-operator">GPU Operator</a> 用于支持配置 GPU 设备的 Kubernetes 集群, 主要包含安装 GPU 驱动，Container Runtime Nvidia, K8S Device Plugin 等</p>
+<h2 id="注意事项">注意事项<a class="heading-anchor" aria-hidden tabindex="-1" href="#注意事项">#</a></h2>
+<ul>
+<li>不支持 ubuntu 20.04 版本</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/nfd/README.md">nfd</a> 用于提供硬件特性检测服务, 并将其作为 Label 附加到节点上</li>
+<li>安装 GPU 驱动
+<ul>
+<li>[推荐] 在宿主机上安装 GPU 驱动, 版本参考 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/gpu-operator/values.yml">values.yml</a> 中的 <code>driver.version</code> 配置
+<ul>
+<li>下载 <a href="https://www.nvidia.com/en-us/drivers/">gpu driver</a></li>
+<li>执行 <code>bash NVIDIA-Linux-x86_64-xxx.xx.xx.run</code> 安装驱动</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果有之前残留旧版本驱动, 则进行卸载</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 通过 apt 安装的卸载方式</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> remove</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --purge</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '^nvidia-.*'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 通过 run 安装的卸载方式</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./NVIDIA-Linux-x86_64-*.run</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --uninstall</span></span></code></pre>
+<pre><code>- [可选] 如果配备 NVLink 设备 (H100/H200/B200/B300) 还需要安装 `nv-fabricmanager` 服务, 参见 [Nvidia Fabric Manager User Guide](https://docs.nvidia.com/datacenter/tesla/fabric-manager-user-guide/index.html#bare-metal-mode)
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-fabricmanager-</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">driver-branc</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">h</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --now</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-fabricmanager</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># B200/B300 额外安装 open 版本驱动和 nvlink5 包</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-open-</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">driver-branc</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">h</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvlink5-</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">driver-branc</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">h</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">nvidia-smi</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -q</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Fabric</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    Fabric</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">      State</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   :</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Completed</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">      Status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                  :</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Success</span></span></code></pre>
+<ul>
+<li>[备选] 如果计划使用 GPU Operator 部署 GPU 驱动, 则修改
+<ul>
+<li>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/gpu-operator/values.yml">values.yml</a> 中的 <code>driver.enabled: true</code></li>
+<li>部署自定义配置 <code>kubectl apply -k driver</code></li>
+<li>如果环境配置 Infiniband/RoCE 设备，且 GPU 是企业级卡（例如 A100, H100 和 B200 等） 则设置 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/gpu-operator/values.yml">values.yml</a> 中的 <code>driver.rdma.enabled: true</code> 选项, 如果 IB/RoCE 驱动使用宿主机管理则设置 <code>driver.rdma.useHostMofed: true</code></li>
+<li>设置 host 上 <code>nvidia-smi</code> 命令可执行</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-smi.sh</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">alias nvidia-smi="chroot /run/nvidia/driver nvidia-smi"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-smi.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/profile.d/nvidia-smi.sh</span></span></code></pre>
+<ul>
+<li>
+<p>自定义 dcgm-exporter 配置和抓取指标到 vm 中</p>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/gpu-operator/values.yml">values.yml</a> 中的 <code>dcgmExporter.enabled: true</code></p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dcgm</span></span></code></pre>
+<p>在 Grafana 中添加 Nvidia DCGM Dashboard (Import 时使用 ID: <code>21362</code>)
+部署 <a href="https://github.com/VictoriaMetrics/VictoriaMetrics">vm</a> 组件后执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dcgm/vm.yaml</span></span></code></pre>
+<ul>
+<li>部署 helm chart</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<ul>
+<li>
+<p>测试</p>
+<p>运行一个 Cuda 示例用于检查基础环境是否准备好</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cuda-vectoradd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<ul>
+<li>卸载</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dcgm</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> driver</span></span></code></pre>
+<h2 id="常见问题排错">常见问题排错<a class="heading-anchor" aria-hidden tabindex="-1" href="#常见问题排错">#</a></h2>
+<ul>
+<li>nvidia-cuda-validator-xxx pod init 启动失败</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 查看 init container 日志</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">$</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-cuda-validator-bft5k</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -c</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cuda-validation</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Failed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> to</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allocate</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> device</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vector</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> A</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> (error </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">code</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> not</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> initialized</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">!</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[Vector addition of </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">50000</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> elements]</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 上面错误通常是 nvidia-fabricmanager 启动失败</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果是宿主机部署的驱动，则需要检查宿主机上 nvidia-fabricmanager 是否启动成功</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">$</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-fabricmanager.service</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果是 pod 部署的驱动，则进入 driver pod 查看服务是否运行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">$</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia-driver-daemonset-7s527</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ps auxf </span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fabric</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果不存在，尝试手动启动</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> nv-fabricmanager -c /usr/share/nvidia/nvswitch/fabricmanager.cfg</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 最后查看到 nvidia-fabricmanager 启动报错如下</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">request</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> to</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> query</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NVSwitch</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> device</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> information</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> from</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NVSwitch</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> driver</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> failed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> with</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> error:WARNING</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Nothing</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> to</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> do</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [NV_WARN_NOTHING_TO_DO]</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 上面错误通常可能是 nvswitch 设备没有被识别到</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果下面目录为空则表明，设备没有被识别到, 需要检查硬件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">$</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ll</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /proc/driver/nvidia-nvswitch/devices/</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">## 通常可以执行下面命令检查 nvidia-fabricmanager 是否正常, 下面状态是正常的</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">nvidia-smi</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -q</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Fabric</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  Fabric</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    State</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   :</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Completed</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    Status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                  :</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Success</span></span></code></pre>

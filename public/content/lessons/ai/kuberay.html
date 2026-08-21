@@ -1,0 +1,21 @@
+<h1 id="kuberay"><a href="https://github.com/ray-project/kuberay">kuberay</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#kuberay">#</a></h1>
+<p>KubeRay 是 Ray 项目官方的 Kubernetes Operator，用于简化 Ray 分布式应用的部署与管理。
+核心 CRD 包括：</p>
+<ul>
+<li>RayCluster：全生命周期管理（创建/销毁、自动扩缩容、容错）；</li>
+<li>RayJob：自动创建集群、提交作业，支持任务完成后清理；</li>
+<li>RayService：支持 Ray Serve 无停机升级与高可用。</li>
+</ul>
+<p><a href="https://github.com/ray-project/ray">Ray</a> 是开源的统一 AI 计算引擎，由核心分布式运行时 + 一套 AI 库组成，帮助 Python/ML 应用从单机无缝扩展到大规模集群。
+核心能力：</p>
+<ul>
+<li>Ray Core：Tasks（无状态）、Actors（有状态）、Objects（分布式对象）；</li>
+<li>AI Libraries：Data（大规模数据）、Train（分布式训练）、Tune（超参优化）、RLlib（强化学习）、Serve（模型服务）。</li>
+</ul>
+<h1 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h1>
+<ul>
+<li><a href="/lessons/ai/kuberay/kuberay-operator">kuberay-operator</a></li>
+<li><a href="/lessons/ai/kuberay/raycluster">raycluster</a></li>
+<li><a href="/lessons/ai/kuberay/rayjob">rayjob</a></li>
+<li><a href="/lessons/ai/kuberay/rayservice">rayservice</a></li>
+</ul>

@@ -1,0 +1,49 @@
+<h1 id="nvbandwidth-kueue">NVBandwidth (Kueue)<a class="heading-anchor" aria-hidden tabindex="-1" href="#nvbandwidth-kueue">#</a></h1>
+<p><strong>用途</strong>：测量 GPU 内存带宽和延迟（PCIe / NVLink / Host-Device），多租户配额控制场景首选。</p>
+<h2 id="快速运行">快速运行<a class="heading-anchor" aria-hidden tabindex="-1" href="#快速运行">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交测试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看每个节点的测试结果</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --no-headers</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> custom-columns=POD:.metadata.name,NODE:.spec.nodeName</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> while</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> read</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NODE</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">  echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "########## Node: ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">NODE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">} (Pod: ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}) ##########"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}"</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">  echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "=================================================================="</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清理</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth.yaml</span></span></code></pre>
+<p>修改 yaml 中 <code>mlPolicy.numNodes</code> 调整测试节点数（默认 2）。</p>
+<h2 id="前置要求">前置要求<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置要求">#</a></h2>
+<p>提交前验证（全部成功才能继续）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. Kueue 队列就绪</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterqueue</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpu-cluster-queue</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：Active</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> localqueue</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpu-local-queue</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：Active</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 配额充足（numNodes=2 时需 16 GPU）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterqueue</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpu-cluster-queue</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.spec.resourceGroups[0].flavors[0].resources[?(@.name=="nvidia.com/gpu")].nominalQuota}'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：≥ numNodes × 8</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 节点 GPU 已注册（任选一个节点验证）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.allocatable.nvidia\.com/gpu}'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：8（或更多）</span></span></code></pre>
+<h2 id="预期输出">预期输出<a class="heading-anchor" aria-hidden tabindex="-1" href="#预期输出">#</a></h2>
+<p>每个 Pod 日志显示该节点的带宽测试矩阵：</p>
+<pre><code>nvbandwidth Version: ...
+Running host_to_device_memcpy_ce
+memcpy CE GPU(row) &#x3C;- CPU(column) bandwidth (GB/s)
+              0
+0       xx.xx
+1       xx.xx
+...
+SUM host_to_device_memcpy_ce  xxx.xx GB/s
+</code></pre>
+<p><code>SUM</code> 行接近 PCIe/NVLink 理论带宽即正常。</p>
+<h2 id="观察状态">观察状态<a class="heading-anchor" aria-hidden tabindex="-1" href="#观察状态">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> workload</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kueue.x-k8s.io/job-uid</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainjob</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/trainjob-name=nvbandwidth</span></span></code></pre>
+<p>任务初始为 <code>suspend=true</code>，Kueue 配额充足时自动 admit 并启动。</p>

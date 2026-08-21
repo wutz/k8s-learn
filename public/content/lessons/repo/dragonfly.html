@@ -1,0 +1,50 @@
+<h1 id="dragonfly">Dragonfly<a class="heading-anchor" aria-hidden tabindex="-1" href="#dragonfly">#</a></h1>
+<p><a href="https://github.com/dragonflyoss/dragonfly">Dragonfly</a> 提供基于 P2P 的镜像与文件分发服务。</p>
+<p>本方案是<strong>备选</strong>的镜像 P2P 服务。缺省方案是在 <a href="/lessons/base">base</a> 阶段部署的 <a href="/lessons/base/spegel">Spegel</a>，两者部署其一即可；如果集群已部署 Spegel，改用 Dragonfly 前先卸载 Spegel。</p>
+<p>相比 Spegel，Dragonfly 额外支持预热 (preheat, 首次拉取也能加速)、分发模型权重等非镜像文件、containerd 之外的运行时，以及跨集群的 P2P 调度与流量统计；代价是组件更多 (manager / scheduler / seed client / client + MySQL + Redis)、资源开销更高。选型对比见 <a href="/lessons/repo">仓库服务</a>。</p>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<p>配置详情参考 <a href="https://github.com/wutz/k8s-in-action/blob/main/repo/dragonfly/values.yml">values.yml</a>。</p>
+<h3 id="创建-seed-client-secret-如果使用">创建 seed client secret (如果使用)<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建-seed-client-secret-如果使用">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generic</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> seed-client-secret</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --from-file=cr.example.com.pem=./cr.example.com.pem</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dragonfly-system</span></span></code></pre>
+<h3 id="创建-client-secret-如果使用">创建 client secret （如果使用）<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建-client-secret-如果使用">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generic</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client-secret</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --from-file=cr.example.com.pem=./cr.example.com.pem</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dragonfly-system</span></span></code></pre>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="验证部署">验证部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证部署">#</a></h2>
+<pre><code>$ kubectl get po -n dragonfly-system
+NAME                                 READY   STATUS    RESTARTS      AGE
+dragonfly-client-gvspg               1/1     Running   0             34m
+dragonfly-client-kxrhh               1/1     Running   0             34m
+dragonfly-manager-864774f54d-6t79l   1/1     Running   0             34m
+dragonfly-mysql-0                    1/1     Running   0             34m
+dragonfly-redis-master-0             1/1     Running   0             34m
+dragonfly-redis-replicas-0           1/1     Running   0             34m
+dragonfly-redis-replicas-1           1/1     Running   0             32m
+dragonfly-redis-replicas-2           1/1     Running   0             32m
+dragonfly-scheduler-0                1/1     Running   0             34m
+dragonfly-seed-client-0              1/1     Running   5 (21m ago)   34m
+</code></pre>
+<h2 id="访问-dragonfly-web-控制台">访问 dragonfly web 控制台<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问-dragonfly-web-控制台">#</a></h2>
+<pre><code>kubectl port-forward svc/dragonfly-manager -n dragonfly-system 8080:8080
+</code></pre>
+<ul>
+<li>浏览器访问： <a href="http://localhost:8080">http://localhost:8080</a></li>
+</ul>
+<p>默认： root/dragonfly</p>
+<h2 id="登录-dragonfly-client-所在的宿主机节点-执行以下命令测试">登录 dragonfly-client 所在的宿主机节点 执行以下命令测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#登录-dragonfly-client-所在的宿主机节点-执行以下命令测试">#</a></h2>
+<p><code>注意：</code> 前提是镜像仓库已经存储了 <code>library/nginx:latest</code>, 如果没有，请自行 <code>push</code> 一个测试镜像</p>
+<pre><code>crictl pull cr.example.com/library/nginx:latest
+</code></pre>
+<ul>
+<li>查看 <code>dragonfly-client</code> pod的日志如下所示：</li>
+</ul>
+<pre><code>  2024-10-21T02:03:02.899178248+00:00  INFO  download task started: Download { url: "http://cr.example.com/libray/nginx/blobs/sha256:55c7e777947803f80ca493164a5d16fd53fceca71c02caf9dcd1bedeaa1440bb", digest: None, range: None, r#type: Standard, tag: None, application: None, priority: Level6, filtered_query_params: ["X-Obs-Date", "X-Amz-User-Agent", "x-cos-security-token", "X-Amz-Algorithm", "X-Goog-Date", "OSSAccessKeyId", "X-Goog-Credential", "X-Amz-Credential", "SecurityToken", "X-Obs-Security-Token", "X-Amz-Expires", "X-Goog-Expires", "q-ak", "X-Goog-Algorithm", "X-Amz-Security-Token", "q-sign-time", "q-sign-algorithm", "q-url-param-list", "X-Goog-Signature", "q-header-list", "X-Goog-SignedHeaders", "Expires", "AccessKeyId", "X-Amz-SignedHeaders", "X-Amz-Signature", "X-Amz-Date", "Signature", "q-signature", "q-key-time"], request_header: {"user-agent": "containerd/v1.7.21-k3s2", "x-dragonfly-registry": "http://cr.example.com", "accept-encoding": "gzip", "accept": "application/vnd.docker.container.image.v1+json, */*"}, piece_length: None, output_path: None, timeout: None, disable_back_to_source: false, need_back_to_source: false, certificate_chain: [], prefetch: false, object_storage: None }
+    at dragonfly-client/src/grpc/dfdaemon_download.rs:227
+    in download_task with host_id: "10.192.0.22-gn016.hs5h.local", task_id: "2b1c2e3985ba1acc0c6b28007148985a03e4bb7973748ba9123ac17f56b17423", peer_id: "10.192.0.22-gn016.hs5h.local-80113ae5-f14f-44bf-b33f-1611e77748ac"
+</code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

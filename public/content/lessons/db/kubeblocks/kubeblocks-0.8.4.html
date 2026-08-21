@@ -1,0 +1,35 @@
+<h1 id="kubeblocks">Kubeblocks<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeblocks">#</a></h1>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<ol>
+<li><code>helmwave down</code></li>
+<li><code>kubectl delete -f hooks/crds.yaml</code></li>
+</ol>
+<h2 id="备份">备份<a class="heading-anchor" aria-hidden tabindex="-1" href="#备份">#</a></h2>
+<ol>
+<li>使用 pvc shared-nvme 作为 BackupRepo</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hooks/backuprepo/prod</span></span></code></pre>
+<ol start="2">
+<li>查询 BackupPolicy</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> backuppolicy</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">cluster-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">-postgresql-backup-policy</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.spec.backupMethods[0].name}'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pg-basebackup</span></span></code></pre>
+<h3 id="定时">定时<a class="heading-anchor" aria-hidden tabindex="-1" href="#定时">#</a></h3>
+<h3 id="按需">按需<a class="heading-anchor" aria-hidden tabindex="-1" href="#按需">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secrets</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">cluster-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">-conn-credential</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.data.password}'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">base64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> backup.yaml</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">apiVersion: dataprotection.kubeblocks.io/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kind: Backup</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">metadata:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  name: mybackup</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  namespace: default</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  annotations:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    dataprotection.kubeblocks.io/connection-password: &#x3C;password></span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">spec:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  backupMethod: pg-basebackup</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  backupPolicyName: pg-postgresql-backup-policy</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> backup.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> backup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mybackup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.metadata.annotations.dataprotection\.kubeblocks\.io/connection-password}'</span></span></code></pre>
+<h2 id="恢复">恢复<a class="heading-anchor" aria-hidden tabindex="-1" href="#恢复">#</a></h2>

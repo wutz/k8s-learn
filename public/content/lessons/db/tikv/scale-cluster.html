@@ -1,0 +1,32 @@
+<h1 id="1-集群扩缩容">1. 集群扩缩容<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-集群扩缩容">#</a></h1>
+<p>本文档默认描述的是tikv服务的扩容。</p>
+<h2 id="11-集群扩容">1.1. 集群扩容<a class="heading-anchor" aria-hidden tabindex="-1" href="#11-集群扩容">#</a></h2>
+<p>tikv服务的扩容当前描述的是tikv的横向扩容。</p>
+<p>横向扩容就是新增服务器节点，横向增加tikv的总容量和处理能力。</p>
+<p>约定当前tikv集群使用tiup命令行工具部署。</p>
+<h3 id="111-编写新节点配置文件">1.1.1. 编写新节点配置文件<a class="heading-anchor" aria-hidden tabindex="-1" href="#111-编写新节点配置文件">#</a></h3>
+<p>假设新加一个节点172.18.12.4，则这个新节点的配置如下所示</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">tikv_servers:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">  - host: 172.19.12.4</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">    resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">      memory_limit: "64G"</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">      cpu_quota: "1600%"</span></span></code></pre>
+<p>把上面信息保存成一个新的文件，这里约定文件名称为scale-out-tikv.toml。</p>
+<p>在主节点上执行如下命令将tikv服务部署到新节点。</p>
+<p>本文档假设172.18.12.1节点为主节点，以下操作全在该节点上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster scale-out tikv01 scale-out-tikv.yaml</span></span></code></pre>
+<p>如果上述命令输出没有报错可以执行如下命令确认节点是否已添加完成。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster display tikv</span></span></code></pre>
+<p>以上命令执行完成后会看到指定节点已经加入到tikv集群。</p>
+<h2 id="12-集群缩容">1.2. 集群缩容<a class="heading-anchor" aria-hidden tabindex="-1" href="#12-集群缩容">#</a></h2>
+<p>执行如下命令把store置为tombstone状态，该状态节点可以移除</p>
+<p>这里假设172.18.12.4节点加入到tikv集群后其store_id = 40。如果要下线该节点就需要执行如下命令</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup ctl:v8.1.1 pd --pd 127.0.0.1:2379 store delete 40</span></span></code></pre>
+<p>命令执行完成后通过如下命令查看节点状态</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster display tikv</span></span></code></pre>
+<p>以上命令会显示当前tikv集群是否可以下线指定节点，如果提示使用prune清理节点信息就可以执行下面的prune命令</p>
+<p>172.18.12.4节点状态会发生如下变化 UP -> Offline -> Tombstone。</p>
+<p>执行如下命令确认没有region再使用刚刚下线的store</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup ctl:v8.1.1 pd --pd 127.0.0.1:2379 region --jq=.regions[] | {id,peers}</span></span></code></pre>
+<p>清除tombstone的节点</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster prune tikv</span></span></code></pre>

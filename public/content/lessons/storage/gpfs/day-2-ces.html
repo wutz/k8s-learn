@@ -1,0 +1,95 @@
+<h1 id="gpfs-使用-ces-实现轻量多租户">GPFS 使用 CES 实现轻量多租户<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpfs-使用-ces-实现轻量多租户">#</a></h1>
+<h2 id="开启-nfs-服务">开启 NFS 服务<a class="heading-anchor" aria-hidden tabindex="-1" href="#开启-nfs-服务">#</a></h2>
+<p>GPFS 的 NFS 服务需要安装在 CES (Cluster Export Services)节点。</p>
+<p>本文档假设 NFS 服务安装在 bj1sn001 节点</p>
+<h3 id="安装软件包">安装软件包<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装软件包">#</a></h3>
+<h3 id="安装依赖">安装依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装依赖">#</a></h3>
+<p>安装 CES 相关软件包需要提前安装如下依赖</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># apt install daemon arping libasn1-8-heimdal libgssapi3-heimdal libhcrypto4-heimdal libheimbase1-heimdal libheimntlm0-heimdal libhx509-5-heimdal libkrb5-26-heimdal libroken18-heimdal libwind0-heimdal</span></span></code></pre>
+<h3 id="安装软件包-1">安装软件包<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装软件包-1">#</a></h3>
+<p>NFS软件依赖SMB相关软件包，所以这里必须先安装SMB相关软件包</p>
+<h4 id="安装-smb-软件包">安装 SMB 软件包<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装-smb-软件包">#</a></h4>
+<ul>
+<li>RHEL/RockyLinux</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/smb_rpms/rhel</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.smb-</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span></code></pre>
+<ul>
+<li>Ubuntu</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/smb_debs/ubuntu/ubuntu2</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.smb-</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span></span>
+<span class="line"></span></code></pre>
+<h4 id="安装-nfs-软件包">安装 NFS 软件包<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装-nfs-软件包">#</a></h4>
+<ul>
+<li>RHEL/RockyLinux</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/ganesha_rpms/rhel</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.nfs-</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span></code></pre>
+<ul>
+<li>Ubuntu</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/lpp/mmfs/5.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/ganesha_debs/ubuntu/ubuntu2</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./gpfs.nfs-</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.deb</span></span>
+<span class="line"></span></code></pre>
+<h2 id="创建共享文件集">创建共享文件集<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建共享文件集">#</a></h2>
+<h3 id="创建文件集">创建文件集<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建文件集">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建根fileset</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmcrfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfsroot</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --inode-space=new</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建nfs导出fileset</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmcrfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs01</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --inode-space=new</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 链接根 fileset 到文件系统上位置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlinkfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfsroot</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -J</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share/nfsroot</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 链接nfs文件集到文件系统上为止</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlinkfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs01</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -J</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share/nfs01</span></span>
+<span class="line"></span></code></pre>
+<h2 id="配置-ces-节点">配置 CES 节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置-ces-节点">#</a></h2>
+<p>执行如下命令激活CES节点</p>
+<p>设置共享root</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cesSharedRoot=/share/nfsroot</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchnode</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --ces-enable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1sn001</span></span></code></pre>
+<h2 id="开启-nfs">开启 NFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#开启-nfs">#</a></h2>
+<p>在所有CES节点上激活NFS服务</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmces</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NFS</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span></code></pre>
+<p>在所有CES节点上启动NFS服务</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmces</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> start</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NFS</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>
+<h2 id="导出nfs">导出NFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#导出nfs">#</a></h2>
+<p>设定认证方法</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmuserauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --data-access-method</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> file</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> userdefined</span></span>
+<span class="line"></span></code></pre>
+<p>导出文件集</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmnfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> export</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share/nfs01</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --client</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "*(Access_Type=RW)"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">如果只允许某个节点10.23.23.21访问就</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">--nfsadd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "10.23.23.21(Access_Type=RW)"</span></span></code></pre>
+<p>查看导出</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmnfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> export</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span></code></pre>
+<p>执行如下命令确认NFS已配置和运行成功</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmces</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmuserauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmnfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> export</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span></code></pre>
+<h2 id="挂载nfs">挂载NFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#挂载nfs">#</a></h2>
+<p>在任意NFS客户端执行如下命令挂载</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -t</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sh90gn001:/share/nfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /mnt</span></span></code></pre>
+<h2 id="关闭nfs">关闭NFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#关闭nfs">#</a></h2>
+<p>移除导出</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmnfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> export</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> remove</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share/nfs01</span></span></code></pre>
+<p>关闭NFS服务和节点</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmces</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> stop</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NFS</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmuserauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> remove</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --data-access-method</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> file</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmces</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> disable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NFS</span></span></code></pre>
+<p>删除fileset</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">与文件系统解绑</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmunlinkfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs01</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmunlinkfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfsroot</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">删除file</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmdelfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmdelfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfsroot</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">可加-f选项强制删除</span></span></code></pre>
+<p>关闭节点的CES功能</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchnode</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --ces-disable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1sn001</span></span></code></pre>

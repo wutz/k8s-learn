@@ -1,0 +1,35 @@
+<h1 id="gpfs-性能调优">GPFS 性能调优<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpfs-性能调优">#</a></h1>
+<p>优化吞吐性能</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 表示 GPFS 在单节点允许体检的读写数据流最大速率, 缺省值为 2048</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># GPFS 利用此参数来计算应为顺序文件访问（Sequential Access）分配多少个预读（prefetch）或后台写入（write-behind）线程</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置每节点最大网络吞吐量的 2 倍, 且最大值为 100000</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 例如配置 4x 200Gb 网络，则为 4*200*1000/8*2=200000MB/s, 由于超过最大值限制则取最大值</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxMBpS=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">100000</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看生效值</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmdiag</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --config</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxMBpS</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># workerThreads 是一个全局性的性能调优参数，用于控制节点上用于处理并发文件系统请求的工作线程池大小</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 处理来自应用程序的并发读写、元数据操作（如创建、删除文件）以及内部维护任务</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 存储集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> workerThreads=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">3072</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 客户端集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> workerThreads=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">1024</span></span></code></pre>
+<p>优化元数据 (元数据 Read &#x26; Stat 提升巨大)</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># maxFilesToCache 指定每个节点可以在内存中缓存的完整 inode（索引节点）的最大数量</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 每个缓存 inode 大约占用 3K - 10K 内存</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 存储集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxFilesToCache=3M</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 客户端集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxFilesToCache=1M</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># maxStatCache 指定在内存中缓存的文件属性（stat 信息）的最大数量</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 它只记录文件的基本属性（如 ls -l 显示的信息），不足以直接打开或读写文件，但足以响应属性查询</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 每个缓存占用 400 - 500 字节内存</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 存储集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxStatCache=4M</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 客户端集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> maxStatCache=1M</span></span></code></pre>
+<p>修改配置参数需要重启 daemon</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmshutdown</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmstartup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmgetstate</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>

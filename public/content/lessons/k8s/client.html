@@ -1,0 +1,90 @@
+<h1 id="使用常用客户端工具">使用常用客户端工具<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用常用客户端工具">#</a></h1>
+<h2 id="kubectl">kubectl<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubectl">#</a></h2>
+<p>阅读文章 <a href="https://kubernetes.io/zh-cn/docs/reference/kubectl/">https://kubernetes.io/zh-cn/docs/reference/kubectl/</a></p>
+<p>常用技巧：</p>
+<ul>
+<li>设置常用环境变量</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.bashrc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">alias k=kubectl</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">source &#x3C;(kubectl completion bash)</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.bashrc</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> po</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test.yaml</span></span></code></pre>
+<ul>
+<li>安装 <a href="https://github.com/sbstp/kubie">kubie</a> 用于多集群和多 NS 管理</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">brew</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubie</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'alias kx=kubie'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.bashrc</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.bashrc</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.kube/configs</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zw1-cs1.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.kube/configs/zw1-cs1.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hs1-cs1.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.kube/configs/hs1-cs1.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kx</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ctx</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zw1-cs1</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[zw1-cs1</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">default] k get node</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[zw1-cs1</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">default] kx ns kube-system</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[zw1-cs1</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">kube-system] k get po</span></span></code></pre>
+<ul>
+<li>
+<p>调试 node/pod</p>
+<p>k8s 1.25 引入临时容器可以进入容器 debug</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 pod 调试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> debug</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">po</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">d</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --image=</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">debug-image</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> debug</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --image=nicolaka/netshoot</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"> # 包含多种调试工具 image </span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 node 调试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> debug</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node/</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">nod</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --image=</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">debug-image</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> debug</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node/gn-10-254-1-1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --image=busybox</span></span></code></pre>
+<h2 id="kustomize">kustomize<a class="heading-anchor" aria-hidden tabindex="-1" href="#kustomize">#</a></h2>
+<p>阅读文章 <a href="https://kubectl.docs.kubernetes.io/">https://kubectl.docs.kubernetes.io/</a></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建目录存放 yaml 文件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ollama</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ollama</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 初始化</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> init</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建各种 yaml 文件</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 然后使用 kustomize 添加</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> edit</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> resource</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> service.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 或者</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<h2 id="helm">Helm<a class="heading-anchor" aria-hidden tabindex="-1" href="#helm">#</a></h2>
+<p>阅读 <a href="https://helm.sh/">https://helm.sh/</a> 了解常用使用方法</p>
+<blockquote>
+<p>作为临时使用, 持久化使用 Helmwave</p>
+</blockquote>
+<h3 id="helmwave">Helmwave<a class="heading-anchor" aria-hidden tabindex="-1" href="#helmwave">#</a></h3>
+<p>阅读 <a href="https://docs.helmwave.app/">https://docs.helmwave.app/</a></p>
+<p>使用案例参考 CertManager</p>
+<ol>
+<li>使用搜索引擎搜索对应项目 helm charts, 然后执行 <code>helm repo add &#x3C;name> &#x3C;url></code> 添加</li>
+<li>使用 <code>helm search repo &#x3C;name>/</code> 仓库下使用的具体版本</li>
+<li>使用 <code>helm show values &#x3C;name>/&#x3C;chart></code> 缺省值，一边后面自定义修改</li>
+<li>创建需要自定义的 <code>vaules.yml</code> 文件</li>
+<li>创建 <code>helmwave.yml</code> 描述文件</li>
+<li>执行 <code>helmwave up --build</code> 部署服务</li>
+<li>执行 <code>helmwave down</code> 卸载服务</li>
+</ol>
+<h2 id="图形客户端">图形客户端<a class="heading-anchor" aria-hidden tabindex="-1" href="#图形客户端">#</a></h2>
+<ul>
+<li><a href="https://headlamp.dev/">Headlamp</a></li>
+</ul>
+<h2 id="其它常用工具">其它常用工具<a class="heading-anchor" aria-hidden tabindex="-1" href="#其它常用工具">#</a></h2>
+<ul>
+<li><a href="https://github.com/stern/stern">stern</a> 用于同时查看多个 Pod 的日志</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看当前 ns 下所有的 pod 日志</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">stern</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看当前 ns 下 name 包含 ms 的 pod 日志</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">stern</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ms</span></span></code></pre>

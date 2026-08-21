@@ -1,0 +1,18 @@
+<h1 id="llm-d"><a href="https://github.com/llm-d/llm-d">llm-d</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#llm-d">#</a></h1>
+<p>llm-d 是一个 Kubernetes 原生的高性能分布式 LLM 推理框架。</p>
+<h2 id="组件概览">组件概览<a class="heading-anchor" aria-hidden tabindex="-1" href="#组件概览">#</a></h2>
+<p><a href="https://github.com/llm-d/llm-d/releases/tag/v0.6.0">https://github.com/llm-d/llm-d/releases/tag/v0.6.0</a></p>
+<h2 id="准备">准备<a class="heading-anchor" aria-hidden tabindex="-1" href="#准备">#</a></h2>
+<ul>
+<li>安装 <a href="/lessons/network/istio">Istio</a> 用于提供推理网关</li>
+<li>安装 <a href="/lessons/ai/llm-d/bbr">bbr</a></li>
+<li>访问 <a href="https://huggingface.co/settings/tokens/new?tokenType=fineGrained">Hugging Face</a> 并创建一权限 <code>Read access to contents of all public gated repos you can access</code> 的 Token，然后替换 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm-d/hf/kustomization.yaml">hf/kustomization.yaml</a> 中的 <code>HF_TOKEN</code> 环境变量。</li>
+</ul>
+<h2 id="部署-llm-d-infra">部署 llm-d-infra<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-llm-d-infra">#</a></h2>
+<ul>
+<li>安装 <a href="/lessons/ai/llm-d/llm-d-infra">llm-d-infra</a></li>
+</ul>
+<h2 id="示例">示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#示例">#</a></h2>
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm-d/examples/llm-d-sim">llm-d-sim</a>  模拟可以部署一个 vLLM 模型服务器模拟器，该模拟器允许大规模测试推理调度，因为每个实例都不需要加速器。</li>
+</ul>

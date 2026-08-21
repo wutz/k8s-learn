@@ -1,0 +1,47 @@
+<h1 id="network-operator-部署指南">Network Operator 部署指南<a class="heading-anchor" aria-hidden tabindex="-1" href="#network-operator-部署指南">#</a></h1>
+<p>NVIDIA Network Operator 用于配置 Kubernetes 集群中的 NVIDIA 网络（Mellanox）设备，支持 RDMA、GPUDirect RDMA、SR-IOV 等功能。</p>
+<h2 id="依赖">依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#依赖">#</a></h2>
+<ul>
+<li>安装 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/base/nfd">nfd</a></li>
+<li>下载并安装 <a href="https://developer.nvidia.com/doca-downloads?deployment_platform=Host-Server&#x26;deployment_package=DOCA-Host&#x26;target_os=Linux&#x26;Architecture=x86_64&#x26;Profile=doca-ofed">DOCA OFED</a> (MLNX OFED 已迁移到 DOCA OFED)</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看部署状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span></span></code></pre>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nicclusterpolicy.yaml</span></span></code></pre>
+<blockquote>
+<p>使用 RoCE 网络需要一些网络隔离时， 则需要使用 <a href="/lessons/network/network-operator/macvlan">MacVLAN</a></p>
+</blockquote>
+<h2 id="使用与测试">使用与测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用与测试">#</a></h2>
+<ul>
+<li>网络为 <code>IB</code> 时，申请资源必须设置 <code>pod.containers.resources.limits.rdma/hca: 1</code></li>
+<li>网络为 <code>RoCE</code> 时，除了像 <code>IB</code> 一样申请 RDMA 设备外，还需要使用 host ip 必须设置 <code>pod.spec.hostNetwork: true</code></li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署测试 pod</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 server 测试 pod</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-rdma-hca-xxx</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /bin/bash</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询 ip 作为 server ip, bond0 需要替换实际可以互通网卡名称</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ip addr show bond0</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询 gid 和 mlx 设备名称</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> show_gids </span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v2</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动测试, 作为 server, -x 指定 gid，-d 指定 mlx 设备名称</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ib_send_bw -x 3 -d mlx5_bond_0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 client 测试 pod</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-rdma-hca-yyy</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /bin/bash</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询 gid 和 mlx 设备名称</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> show_gids </span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v2</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动测试, 作为 client，-x 指定 gid，-d 指定 mlx 设备名称</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ib_send_bw -x 3 -d mlx5_bond_0 </span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">server_ip</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除测试 pod</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nicclusterpolicy.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

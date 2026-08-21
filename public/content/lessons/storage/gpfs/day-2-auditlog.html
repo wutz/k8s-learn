@@ -1,0 +1,14 @@
+<h2 id="开启关闭审计功能">开启关闭审计功能<a class="heading-anchor" aria-hidden tabindex="-1" href="#开启关闭审计功能">#</a></h2>
+<p>mmaudit命令说明： <a href="https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=reference-mmaudit-command">https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=reference-mmaudit-command</a></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 开启审计。会在执行文件系统上创建一个.audit_log的文件集，对应目录同名。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 默认日志轮转周期 365天。 当一个文件达到5000000 条记录或者文件大小超过400MB 时启用新的文件。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 通过 --retention 后面跟数字修改默认保留天数。</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmaudit</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --retention</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 30</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 关闭审计</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmaudit</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> disable</span></span></code></pre>
+<h2 id="调整审计事件">调整审计事件<a class="heading-anchor" aria-hidden tabindex="-1" href="#调整审计事件">#</a></h2>
+<p>默认GPFS会把所有事件都进行审计，数据量很大。</p>
+<p>所有事件官方说明： <a href="https://www.ibm.com/docs/en/storage-scale/6.0.1?topic=logging-file-audit-events">https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=events-file-audit-logging</a></p>
+<p>我们默认开启文件创建、删除和重命名的事件。fs1是文件系统名称，按照实际修改</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmaudit</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --events</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> CREATE,RENAME,RMDIR,UNLINK</span></span></code></pre>

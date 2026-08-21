@@ -1,0 +1,16 @@
+<h2 id="推荐硬件">推荐硬件<a class="heading-anchor" aria-hidden tabindex="-1" href="#推荐硬件">#</a></h2>
+<p>以下内容为XSKY厂家推荐的硬件配置:</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>Intel(R) Xeon(R) Silver 4314 CPU @ 2.40GHz</span></span>
+<span class="line"><span>RAID bus controller: Broadcom / LSI MegaRAID SAS-3 3108</span></span>
+<span class="line"><span>256G 内存</span></span>
+<span class="line"><span>896G系统盘</span></span>
+<span class="line"><span>4*1.78T NVME</span></span>
+<span class="line"><span>Ethernet controller: Broadcom Inc. and subsidiaries BCM57414 NetXtreme-E 10Gb/25Gb RDMA Ethernet Controller *2</span></span>
+<span class="line"><span>14.6T * 32</span></span></code></pre>
+<h2 id="总空间裸容量和可用空间有效容量估算方法">总空间(裸容量)和可用空间(有效容量)估算方法<a class="heading-anchor" aria-hidden tabindex="-1" href="#总空间裸容量和可用空间有效容量估算方法">#</a></h2>
+<p>这里假设需要使用6台物理服务器搭建XSKY混闪存储集群，每台物理服务器配置32块 14.6TB 机械盘，4块1.6TB NVME盘。数据使用纠删码4+2:1</p>
+<p>裸容量= HDD容量(GiB) * HDD数量 * 节点数</p>
+<p>总有效容量(EC)= (裸容量 * data osd数量) * K/(K+M)</p>
+<p>总有效容量(副本)= (裸容量 - 23GiB * data osd数量) / 副本数</p>
+<p>对象存储可用容量= 总有效容量 * 0.9（0.9是硬盘容量阈值的值）。</p>
+<p>本次计算结果 ：32块 * 14.55TB * 6台 * 0.667 * 0.9系数 ≈ 1670T</p>

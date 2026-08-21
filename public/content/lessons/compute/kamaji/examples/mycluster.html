@@ -1,0 +1,24 @@
+<h2 id="创建租户集群">创建租户集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建租户集群">#</a></h2>
+<h3 id="1-创建-datastore可选">1. 创建 Datastore（可选）<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-创建-datastore可选">#</a></h3>
+<p>如果使用默认的内置 etcd，可跳过此步骤。如果需要使用外部数据存储：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 示例：使用外部 etcd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> datastore.yaml</span></span></code></pre>
+<p>参考 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/kamaji/examples/mycluster/datastore.yaml">datastore.yaml</a> 配置示例。</p>
+<h3 id="2-创建租户控制平面">2. 创建租户控制平面<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-创建租户控制平面">#</a></h3>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/kamaji/examples/mycluster/tcp.yaml">tcp.yaml</a> 配置示例。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<h3 id="3-获取租户集群-kubeconfig">3. 获取租户集群 kubeconfig<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-获取租户集群-kubeconfig">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 kubeconfig</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant-cluster-admin-kubeconfig</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.data.admin\.conf}'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> base64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant-kubeconfig.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试连接</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span></code></pre>
+<h3 id="4-添加工作节点">4. 添加工作节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-添加工作节点">#</a></h3>
+<p>租户控制平面创建后，需要添加工作节点。可以使用以下方式：</p>
+<ul>
+<li><strong>手动加入</strong>：使用 kubeadm join 命令</li>
+<li><strong>Cluster API</strong>：使用 Cluster API 提供商自动管理节点</li>
+<li><strong>虚拟节点</strong>：使用 Virtual Kubelet 等方案</li>
+</ul>
+<p>参考 <a href="/lessons/compute/kamaji/examples/mycluster/join-worker-nodes">join-worker-nodes.md</a> 了解详细步骤。</p>

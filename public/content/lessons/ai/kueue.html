@@ -1,0 +1,255 @@
+<h1 id="kueue"><a href="https://kueue.sigs.k8s.io">Kueue</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#kueue">#</a></h1>
+<p>Kubernetes 批处理队列管理器，提供配额控制、公平分配和优先级抢占。</p>
+<p>与 scheduler-plugins Coscheduling 的关键区别：Kueue 在<strong>准入层</strong>做 Gang 判断（资源够才创建 Pod），而非在调度层逐个尝试。资源不足时零 Pod、零调度开销。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<h3 id="1-安装-kueuecontroller--webhook--crd">1. 安装 Kueue（controller + webhook + CRD）<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-安装-kueuecontroller--webhook--crd">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<p>验证 Pod Running：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kueue-system</span></span></code></pre>
+<h3 id="2-创建队列基础设施必须">2. 创建队列基础设施（必须）<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-创建队列基础设施必须">#</a></h3>
+<p>helmwave 只部署 Kueue 本身，不创建队列资源。以下资源是 Kueue 正常运行的必要前提：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>资源</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Topology</td>
+<td>TAS 拓扑层级（单层 hostname）</td>
+</tr>
+<tr>
+<td>2</td>
+<td>ResourceFlavor</td>
+<td>GPU 节点池标签（按 <code>scclabs.dev/gpu</code> 区分型号）+ TAS 引用</td>
+</tr>
+<tr>
+<td>3</td>
+<td>ClusterQueue</td>
+<td>集群级配额池（引用 ResourceFlavor）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>LocalQueue</td>
+<td>namespace 级入口（引用 ClusterQueue）</td>
+</tr>
+<tr>
+<td>—</td>
+<td>WorkloadPriorityClass</td>
+<td>可选，Workload 级优先级（独立于 Pod PriorityClass）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>⚠️ 应用前必须修改 <code>queue-setup.yaml</code> 中的 nominalQuota</strong>：Kueue 不自动发现集群资源，配额必须手工填写。文件中当前值是测试集群的（3×8=24 GPU），换集群需替换。</p>
+<p>获取集群 allocatable 汇总：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./get-quota.sh</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">              # 所有 GPU 节点（node-role.kubernetes.io/gpu）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./get-quota.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rtx-5090</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">     # 仅 rtx-5090 节点池（按 ResourceFlavor 分别统计）</span></span></code></pre>
+<blockquote>
+<p><code>nominalQuota</code> 应填 <strong>allocatable</strong>（不是 capacity）—— <code>allocatable = capacity − kubelet system reservation</code>，是 Pod 实际可用的上限。</p>
+</blockquote>
+<p>修改完成后 apply：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> queue-setup.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证 ClusterQueue active（status 应显示 True）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterqueue</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpu-cluster-queue</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证 LocalQueue</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> localqueue</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpu-local-queue</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span></span></code></pre>
+<h3 id="3-trainjob-使用-kueue">3. TrainJob 使用 Kueue<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-trainjob-使用-kueue">#</a></h3>
+<p>TrainJob 接入 Kueue 只需 <strong>加 1 个 label + 设 suspend: true</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">trainer.kubeflow.org/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">TrainJob</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-job</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  labels</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    kueue.x-k8s.io/queue-name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpu-local-queue</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">       # 必填：指向 LocalQueue</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    kueue.x-k8s.io/priority-class</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">low-priority</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">      # 可选：Workload 优先级</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  suspend</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">                                      # Kueue 控制 unsuspend</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  runtimeRef</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">torch-distributed</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  trainer</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    numNodes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    resourcesPerNode</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      requests</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        nvidia.com/gpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"1"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      limits</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        nvidia.com/gpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"1"</span></span></code></pre>
+<p><strong>Label 说明：</strong></p>
+<table>
+<thead>
+<tr>
+<th>Label</th>
+<th>必填</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kueue.x-k8s.io/queue-name</code></td>
+<td>✅</td>
+<td>指向 LocalQueue。缺失则 Kueue 不接管，TrainJob 永远 Suspended</td>
+</tr>
+<tr>
+<td><code>kueue.x-k8s.io/priority-class</code></td>
+<td>❌</td>
+<td>Workload 级优先级，决定排队顺序与抢占行为。可选值（见 <code>queue-setup.yaml</code>）：<code>high-priority</code> (10000) / <code>low-priority</code> (1000)。<strong>不设则默认 0</strong>（最低）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>⚠️ 不要设 <code>spec.managedBy</code></strong> — 该字段仅用于 MultiKueue（跨集群）。单集群 Kueue 走 webhook + queue-name label 路径，设 managedBy 会被 Trainer webhook 拒绝。</p>
+<p>完整示例参考 <code>ai/trainer/examples/*/kueue/</code>。</p>
+</blockquote>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<h3 id="分步排队验证大-gang-不阻塞小-gang">分步排队验证（大 Gang 不阻塞小 Gang）<a class="heading-anchor" aria-hidden tabindex="-1" href="#分步排队验证大-gang-不阻塞小-gang">#</a></h3>
+<blockquote>
+<p>前置：集群已有 <code>torch-distributed</code> TrainingRuntime（参考 <code>ai/trainer/examples/</code>）。</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step1.yaml</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 2 GPU → 立即 Admit</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step2.yaml</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 24 GPU → 排队等待</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step3.yaml</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 2 GPU → 立即 Admit（不被阻塞）</span></span></code></pre>
+<p>观察：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> workloads</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainjob</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kueue.x-k8s.io/queue-name=gpu-local-queue</span></span></code></pre>
+<h3 id="清理测试资源">清理测试资源<a class="heading-anchor" aria-hidden tabindex="-1" href="#清理测试资源">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step1.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step2.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests-phase1-step3.yaml</span></span></code></pre>
+<h2 id="故障排查">故障排查<a class="heading-anchor" aria-hidden tabindex="-1" href="#故障排查">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>检查命令</th>
+<th>常见原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TrainJob 一直 Suspended</td>
+<td><code>kubectl get workload -n &#x3C;ns></code> 查 Workload 是否存在<br><code>kubectl describe workload &#x3C;name> -n &#x3C;ns></code> 看 Events</td>
+<td>1. 缺 <code>kueue.x-k8s.io/queue-name</code> label<br>2. LocalQueue 不存在或 namespace 不匹配<br>3. nominalQuota 不足（排队中）</td>
+</tr>
+<tr>
+<td>Workload Admitted=False</td>
+<td><code>kubectl get workload &#x3C;name> -n &#x3C;ns> -o yaml</code> 看 <code>status.conditions[].message</code></td>
+<td>1. TAS 找不到足够节点（message 会打印 excluded 原因）<br>2. nominalQuota &#x3C; 需求</td>
+</tr>
+<tr>
+<td>Workload 不存在</td>
+<td><code>kubectl get trainjob &#x3C;name> -n &#x3C;ns> -o yaml</code> 看 labels</td>
+<td>缺少 <code>kueue.x-k8s.io/queue-name</code> label</td>
+</tr>
+</tbody>
+</table>
+<p>详细诊断流程参考 skill <code>k8s-ai-training</code> 的 <code>references/kueue-tas-admission-diagnosis.md</code>。</p>
+<h2 id="清理全部包括队列基础设施">清理全部（包括队列基础设施）<a class="heading-anchor" aria-hidden tabindex="-1" href="#清理全部包括队列基础设施">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> queue-setup.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<hr>
+<h2 id="附录tas-双门控原理">附录：TAS 双门控原理<a class="heading-anchor" aria-hidden tabindex="-1" href="#附录tas-双门控原理">#</a></h2>
+<blockquote>
+<p>一线工程师排障时如果遇到"配额够但 Workload 不被 Admit"，看这一节。</p>
+</blockquote>
+<h3 id="准入双门控源码-clusterqueue_snapshotgo-fits">准入双门控（源码 <code>clusterqueue_snapshot.go</code> Fits()）<a class="heading-anchor" aria-hidden tabindex="-1" href="#准入双门控源码-clusterqueue_snapshotgo-fits">#</a></h3>
+<p>启用 TAS（ResourceFlavor 设置 <code>topologyName</code>）后，Workload 准入受 <strong>两个独立门控</strong> 控制，<strong>取更严格者</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>门控</th>
+<th>类型</th>
+<th>来源</th>
+<th>维护方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>门 1：<code>nominalQuota</code></td>
+<td>静态配额上限</td>
+<td>ClusterQueue 配置</td>
+<td>手工填写，节点变化不感知</td>
+</tr>
+<tr>
+<td>门 2：TAS <code>freeCapacity</code></td>
+<td>动态节点容量</td>
+<td>实时扫描节点 allocatable</td>
+<td>自动感知，节点增减立即生效</td>
+</tr>
+</tbody>
+</table>
+<p><strong>实际行为</strong>：</p>
+<ul>
+<li>两门都通过 → Admit，Pod 创建</li>
+<li>任一门不通过 → 排队（Workload <code>QuotaReserved=False</code> 或 <code>Admitted=False</code>）</li>
+</ul>
+<h3 id="tas-freecapacity-计算源码-tas_flavor_snapshotgo">TAS freeCapacity 计算（源码 <code>tas_flavor_snapshot.go</code>）<a class="heading-anchor" aria-hidden tabindex="-1" href="#tas-freecapacity-计算源码-tas_flavor_snapshotgo">#</a></h3>
+<pre><code>freeCapacity = Σ(节点 .status.allocatable) − 非TAS Pod 占用（DaemonSet 等）
+              ↑ 仅计入 Ready=True 且 .spec.unschedulable=false 的节点
+</code></pre>
+<h3 id="nominalquota-设置策略">nominalQuota 设置策略<a class="heading-anchor" aria-hidden tabindex="-1" href="#nominalquota-设置策略">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>设置值</th>
+<th>行为</th>
+<th>风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>= allocatable 总量</strong>（推荐）</td>
+<td>两门一致；TAS 失效时 nominalQuota 兜底</td>
+<td>无</td>
+</tr>
+<tr>
+<td>> allocatable</td>
+<td>完全依赖 TAS 门</td>
+<td>TAS 失效时无保护</td>
+</tr>
+<tr>
+<td>&#x3C; allocatable</td>
+<td>nominalQuota 更严格</td>
+<td>浪费 TAS 发现的额外容量</td>
+</tr>
+</tbody>
+</table>
+<h3 id="关键不可变字段修改需重建">关键不可变字段（修改需重建）<a class="heading-anchor" aria-hidden tabindex="-1" href="#关键不可变字段修改需重建">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>资源</th>
+<th>不可变字段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Topology</code></td>
+<td><code>levels</code></td>
+</tr>
+<tr>
+<td><code>ResourceFlavor</code>（设了 topologyName 后）</td>
+<td><code>nodeLabels</code>、<code>tolerations</code>、<code>topologyName</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="tas-配置约束">TAS 配置约束<a class="heading-anchor" aria-hidden tabindex="-1" href="#tas-配置约束">#</a></h3>
+<ul>
+<li><code>kubernetes.io/hostname</code> 只能用在 Topology 的<strong>最低层</strong>（最后一层）</li>
+<li>所有被 TAS 管理的节点必须有 Topology levels 中的<strong>每个 label</strong></li>
+<li>GPU 节点的 tolerations 必须在 ResourceFlavor 中<strong>显式声明</strong>（TAS 不感知 webhook 自动注入）</li>
+</ul>
+<h3 id="排查-tas-失败">排查 TAS 失败<a class="heading-anchor" aria-hidden tabindex="-1" href="#排查-tas-失败">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 查 Workload 状态消息（TAS 错误会打印 excluded nodes 与原因）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> workload</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">n</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">s</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> yq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '.status.conditions'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 查 ResourceFlavor 是否绑定 Topology</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> resourceflavor</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rtx-5090</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> topologyName</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 查节点是否带齐 Topology levels 中的所有 label</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -L</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubernetes.io/hostname,scclabs.dev/gpu</span></span></code></pre>

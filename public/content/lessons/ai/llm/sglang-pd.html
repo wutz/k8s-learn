@@ -1,0 +1,17 @@
+<h1 id="sglang-pd">sglang-pd<a class="heading-anchor" aria-hidden tabindex="-1" href="#sglang-pd">#</a></h1>
+<p>演示使用 sglang 部署推理服务，使用 RoleBasedGroup (RBG) 部署, 适用于 PD 分离架构</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="访问">访问<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">IP</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway/inference-gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.addresses[0].value}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">PORT</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">80</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">IP</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">PORT</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/v1/completions</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -H</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Content-Type: application/json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"model": "sglang/Qwen/Qwen3-32B",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"prompt": "Write as if you were a critic: San Francisco",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"max_tokens": 100,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"temperature": 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}'</span></span></code></pre>
+<blockquote>
+<p>第一次访问模型较慢</p>
+</blockquote>

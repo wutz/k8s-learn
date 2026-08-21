@@ -1,0 +1,248 @@
+<h1 id="agent-sandbox">Agent Sandbox<a class="heading-anchor" aria-hidden tabindex="-1" href="#agent-sandbox">#</a></h1>
+<p><a href="https://github.com/kubernetes-sigs/agent-sandbox">Agent Sandbox</a> 是 Kubernetes SIG Apps 下的开源项目，提供专为 AI Agent 运行时设计的声明式 API 和控制器。它解决传统 K8s 原语（Deployment/StatefulSet）无法满足 AI Agent 的有状态单例、间歇性活跃、安全隔离执行需求。</p>
+<h2 id="核心特性">核心特性<a class="heading-anchor" aria-hidden tabindex="-1" href="#核心特性">#</a></h2>
+<ul>
+<li><strong>Sandbox CRD</strong>：有状态单例 Pod，提供稳定主机名和网络标识</li>
+<li><strong>SandboxTemplate</strong>：可复用的 Sandbox 配置模板</li>
+<li><strong>SandboxClaim</strong>：从模板请求 Sandbox 实例</li>
+<li><strong>SandboxWarmPool</strong>：预热 Sandbox 池，消除冷启动延迟（~0s 分配）</li>
+<li><strong>强隔离</strong>：支持 gVisor（系统调用级）和 Kata Containers（VM 级）</li>
+<li><strong>生命周期管理</strong>：暂停/恢复、缩容至零、持久存储</li>
+</ul>
+<h2 id="架构">架构<a class="heading-anchor" aria-hidden tabindex="-1" href="#架构">#</a></h2>
+<pre><code>Agent 框架 (LangChain/OpenAI SDK)
+    │
+    ├─> SandboxClaim ──> SandboxWarmPool ──> Pre-warmed Sandbox Pod
+    │
+    └─> Sandbox Controller
+            │
+            ├─> gVisor (用户态内核拦截)
+            └─> Kata Containers (轻量 VM 隔离)
+</code></pre>
+<h2 id="前置依赖">前置依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置依赖">#</a></h2>
+<h3 id="1-安装隔离运行时">1. 安装隔离运行时<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-安装隔离运行时">#</a></h3>
+<h4 id="方式-agvisor推荐">方式 A：gVisor（推荐）<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式-agvisor推荐">#</a></h4>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 gVisor runsc</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">wget</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">wget</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc.sha512</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sha512sum</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -c</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> runsc.sha512</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">chmod</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> a+rx</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> runsc</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> runsc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/local/bin</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置 containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd/config.toml</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">version = 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  runtime_type = "io.containerd.runc.v2"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  runtime_type = "io.containerd.runsc.v1"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 RuntimeClass</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">apiVersion: node.k8s.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kind: RuntimeClass</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">metadata:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  name: gvisor</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">handler: runsc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span></code></pre>
+<h4 id="方式-bkata-containers">方式 B：Kata Containers<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式-bkata-containers">#</a></h4>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 Kata Containers</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kata-runtime</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kata-containers-image</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置 containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">containerd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd/config.toml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sed</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/runtime_type = "io.containerd.runc.v2"/runtime_type = "io.containerd.kata.v2"/g'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd/config.toml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 RuntimeClass</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">apiVersion: node.k8s.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kind: RuntimeClass</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">metadata:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  name: kata</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">handler: kata</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span></code></pre>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<p>本项目使用 <strong>Kustomize</strong> 管理配置，支持开发和生产环境的差异化部署。</p>
+<h3 id="kustomize-部署推荐">Kustomize 部署（推荐）<a class="heading-anchor" aria-hidden tabindex="-1" href="#kustomize-部署推荐">#</a></h3>
+<h4 id="开发环境部署">开发环境部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#开发环境部署">#</a></h4>
+<p>开发环境使用标准容器运行时（无需 gVisor/Kata），资源限制较宽松，便于本地测试：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署到 default namespace</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> overlays/dev</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandbox</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandboxtemplate</span></span></code></pre>
+<h4 id="生产环境部署">生产环境部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#生产环境部署">#</a></h4>
+<p>生产环境强制使用 gVisor 隔离，资源限制严格，部署到独立 namespace：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署到 agent-sandbox namespace</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> overlays/prod</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> agent-sandbox</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandbox</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> agent-sandbox</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandboxtemplate</span></span></code></pre>
+<h4 id="目录结构">目录结构<a class="heading-anchor" aria-hidden tabindex="-1" href="#目录结构">#</a></h4>
+<pre><code>agent-sandbox/
+├── base/                          # 基础配置
+│   ├── kustomization.yaml         # 引用上游 Controller + 本地资源
+│   ├── runtimeclass.yaml          # gVisor/Kata RuntimeClass 定义
+│   ├── python-sandbox-template.yaml  # Python Sandbox 模板
+│   └── sandbox.yaml               # 示例 Sandbox 实例
+├── overlays/
+│   ├── dev/                       # 开发环境覆盖
+│   │   └── kustomization.yaml     # 移除 runtimeClassName，增加资源限制
+│   └── prod/                      # 生产环境覆盖
+│       └── kustomization.yaml     # 强制 gVisor，生产级资源配额
+└── examples/                      # 额外示例
+    ├── basic-sandbox.yaml
+    ├── template-claim.yaml
+    └── warmpool.yaml
+</code></pre>
+<h3 id="传统脚本部署">传统脚本部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#传统脚本部署">#</a></h3>
+<p>如果需要快速一键部署（不使用 Kustomize）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./deploy.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span></span></code></pre>
+<p>脚本会自动完成：</p>
+<ol>
+<li>部署 Agent Sandbox Controller</li>
+<li>创建 Python Sandbox Template</li>
+<li>应用 RuntimeClass（gVisor/Kata）</li>
+<li>部署示例 Sandbox</li>
+</ol>
+<h3 id="2-验证部署">2. 验证部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-验证部署">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 controller 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> agent-sandbox-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> agent-sandbox-controller-manager</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 CRD</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crd</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> agents.x-k8s.io</span></span></code></pre>
+<h3 id="3-部署测试-sandbox">3. 部署测试 Sandbox<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-部署测试-sandbox">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> examples/basic-sandbox.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 Sandbox 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandbox</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 Sandbox Pod</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sandbox.agents.x-k8s.io/name=basic-sandbox</span></span></code></pre>
+<h3 id="4-测试隔离执行">4. 测试隔离执行<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-测试隔离执行">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 Sandbox</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">sandbox-pod-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /bin/bash</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试隔离（gVisor 会拦截某些系统调用）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">strace</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 可以看到 gVisor 的系统调用拦截</span></span></code></pre>
+<h2 id="示例配置">示例配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#示例配置">#</a></h2>
+<h3 id="基础-sandbox">基础 Sandbox<a class="heading-anchor" aria-hidden tabindex="-1" href="#基础-sandbox">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agents.x-k8s.io/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Sandbox</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">basic-sandbox</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  podTemplate</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      runtimeClassName</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gvisor</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 或 kata</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      containers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agent</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python:3.11-slim</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        command</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: [</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"sleep"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">, </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"infinity"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">]</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        resources</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">          requests</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            memory</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"256Mi"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            cpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"250m"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">          limits</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            memory</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"512Mi"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            cpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"500m"</span></span></code></pre>
+<h3 id="sandboxtemplate--sandboxclaim">SandboxTemplate + SandboxClaim<a class="heading-anchor" aria-hidden tabindex="-1" href="#sandboxtemplate--sandboxclaim">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#ABB2BF">---</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agents.x-k8s.io/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">SandboxTemplate</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python-agent-template</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  podTemplate</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      runtimeClassName</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gvisor</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      containers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agent</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python:3.11-slim</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        command</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: [</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"sleep"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">, </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"infinity"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">]</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#ABB2BF">---</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agents.x-k8s.io/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">SandboxClaim</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-python-agent</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  templateRef</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python-agent-template</span></span></code></pre>
+<h3 id="sandboxwarmpool">SandboxWarmPool<a class="heading-anchor" aria-hidden tabindex="-1" href="#sandboxwarmpool">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">agents.x-k8s.io/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">SandboxWarmPool</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python-warmpool</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  replicas</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">3</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 预热 3 个 Sandbox</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  templateRef</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">python-agent-template</span></span></code></pre>
+<h2 id="sandbox-router">Sandbox Router<a class="heading-anchor" aria-hidden tabindex="-1" href="#sandbox-router">#</a></h2>
+<p>Sandbox Router 是 Agent Sandbox 的网络代理组件，由 FastAPI 实现。它的作用是：</p>
+<ul>
+<li><strong>统一入口</strong>：外部流量通过单一端点访问所有 Sandbox，无需逐个暴露 Pod IP</li>
+<li><strong>路由转发</strong>：通过 HTTP Header <code>X-Sandbox-ID</code> 识别目标 Sandbox，将请求路由到对应 Pod IP</li>
+<li><strong>服务发现</strong>：自动关联 SandboxClaim 与其分配的 Pod，维护路由表</li>
+<li><strong>安全边界</strong>：配合 NetworkPolicy，Sandbox Pod 默认不可被外部直接访问，只能通过 Router 转发</li>
+</ul>
+<h3 id="架构-1">架构<a class="heading-anchor" aria-hidden tabindex="-1" href="#架构-1">#</a></h3>
+<pre><code>外部 AI 框架 (LangChain, OpenAI SDK)
+    │
+    │  POST /execute
+    │  Header: X-Sandbox-ID: my-agent-sandbox
+    ▼
+┌───────────────┐
+│ Sandbox Router│  (FastAPI, K8s Service)
+│  端口 8080    │
+└───────┬───────┘
+        │ 查找 X-Sandbox-ID → Pod IP 映射
+        ▼
+┌───────────────┐
+│ Sandbox Pod   │  (隔离环境)
+│  10.x.x.x    │
+└───────────────┘
+</code></pre>
+<h3 id="当前状态">当前状态<a class="heading-anchor" aria-hidden tabindex="-1" href="#当前状态">#</a></h3>
+<p>Sandbox Router 使用 GCP staging 镜像（<code>us-central1-docker.pkg.dev/k8s-staging-images/...</code>），在非 GCP 环境可能无法拉取。如果集群无法访问该镜像仓库，可以：</p>
+<ol>
+<li>自行构建镜像（源码在上游仓库 <code>clients/python/agentic-sandbox-client/sandbox-router/</code>）</li>
+<li>跳过部署 Router，直接通过 kubectl exec 或 port-forward 访问 Sandbox</li>
+</ol>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<h3 id="kustomize-方式">Kustomize 方式<a class="heading-anchor" aria-hidden tabindex="-1" href="#kustomize-方式">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载开发环境</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> overlays/dev</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载生产环境</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> overlays/prod</span></span></code></pre>
+<h3 id="脚本方式">脚本方式<a class="heading-anchor" aria-hidden tabindex="-1" href="#脚本方式">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./deploy.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> uninstall</span></span></code></pre>
+<h2 id="常见问题">常见问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#常见问题">#</a></h2>
+<h3 id="1-sandbox-pod-无法启动">1. Sandbox Pod 无法启动<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-sandbox-pod-无法启动">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 RuntimeClass</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> runtimeclass</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查节点是否支持 gVisor/Kata</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> describe</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> runtime</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 Pod 事件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> describe</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">sandbox-pod-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span></code></pre>
+<h3 id="2-gvisor-系统调用被拦截">2. gVisor 系统调用被拦截<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-gvisor-系统调用被拦截">#</a></h3>
+<p>gVisor 默认拦截某些危险的系统调用。如果需要更宽松的策略，可以在 <code>/etc/containerd/config.toml</code> 中配置 <code>runsc</code> 的 <code>--platform</code> 参数。</p>
+<h3 id="3-kata-containers-性能问题">3. Kata Containers 性能问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-kata-containers-性能问题">#</a></h3>
+<p>Kata Containers 使用完整的 VM 隔离，启动时间比 gVisor 慢（150-300ms vs 亚秒级）。如果对冷启动敏感，建议使用 SandboxWarmPool 预热。</p>
+<h2 id="参考资料">参考资料<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考资料">#</a></h2>
+<ul>
+<li><a href="https://github.com/kubernetes-sigs/agent-sandbox">Agent Sandbox GitHub</a></li>
+<li><a href="https://agent-sandbox.sigs.k8s.io/">Agent Sandbox 官方文档</a></li>
+<li><a href="https://gvisor.dev/docs/">gVisor 文档</a></li>
+<li><a href="https://katacontainers.io/">Kata Containers 文档</a></li>
+</ul>

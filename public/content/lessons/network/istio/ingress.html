@@ -1,0 +1,61 @@
+<h1 id="kubernetes-ingress">Kubernetes Ingress<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubernetes-ingress">#</a></h1>
+<blockquote>
+<p>⚠️ <strong>注意</strong>: 这是基于 Kubernetes Ingress API 的旧方案。<strong>推荐新服务使用 <a href="/lessons/network/istio/gateway-api">../gateway-api/</a> 部署配置</strong>。</p>
+<ul>
+<li><strong>Gateway API</strong> 是 Kubernetes 官方推荐的下一代流量管理 API</li>
+<li>功能更强大：支持流量分割、Headers 操作、跨命名空间路由等</li>
+<li>POC 验证结论：Gateway API 可完全替代 Ingress API</li>
+</ul>
+<p>本目录保留用于过渡期参考，后续可能废弃。</p>
+</blockquote>
+<hr>
+<h2 id="与-gateway-api-的关系">与 Gateway API 的关系<a class="heading-anchor" aria-hidden tabindex="-1" href="#与-gateway-api-的关系">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>本目录 (Ingress)</th>
+<th>gateway-api/</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API 标准</td>
+<td>Kubernetes Ingress API (旧)</td>
+<td>Gateway API (新标准)</td>
+</tr>
+<tr>
+<td>推荐程度</td>
+<td>⚠️ 过渡期保留</td>
+<td>✅ 推荐使用</td>
+</tr>
+<tr>
+<td>功能范围</td>
+<td>基础路由</td>
+<td>高级路由、流量分割等</td>
+</tr>
+<tr>
+<td>维护状态</td>
+<td>维持现状</td>
+<td>持续优化</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<blockquote>
+<p>如果需要设置 istio 作为缺省 IngressClass, 则解开 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/istio/ingress/ingress-class.yaml">ingress-class.yaml</a> 中的注释</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署测试 Ingress</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 Ingress 地址</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">INGRESS_HOST</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-ingressgateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.loadBalancer.ingress[0].ip}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">INGRESS_PORT</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-ingressgateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.spec.ports[?(@.name=="http2")].port}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试 Ingress</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -s</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -I</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -HHost:httpbin.example.com</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "http://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$INGRESS_HOST</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$INGRESS_PORT</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/status/200"</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

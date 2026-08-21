@@ -1,0 +1,14 @@
+<h1 id="部署-kamaji-etcd">部署 kamaji-etcd<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-kamaji-etcd">#</a></h1>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="查看-datastore">查看 datastore<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看-datastore">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mc01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> datastore</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                DRIVER</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   AGE</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">default</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             etcd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     4m38s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tcp01-kamaji-etcd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   etcd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     19s</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span></code></pre>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<blockquote>
+<p><a href="https://github.com/clastix/kamaji-etcd">https://github.com/clastix/kamaji-etcd</a></p>
+</blockquote>

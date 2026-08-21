@@ -1,0 +1,104 @@
+<h1 id="通常修改的配置">通常修改的配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#通常修改的配置">#</a></h1>
+<ul>
+<li>修改 <code>inventory/mycluster/inventory.ini</code> 设置控制节点和工作节点 hostname 和 ip</li>
+<li>修改 <code>inventory/mycluster/group_vars/all/all.yml</code>
+<ul>
+<li>设置多个 <code>upstream_dns_servers</code> 以替代宿主机默认 dns 服务器, 并且所有节点必须能访问到这些 dns 服务器, 否则导致 coredns 和 nodelocaldns 启动失败</li>
+</ul>
+</li>
+<li>修改 <code>inventory/mycluster/group_vars/all/containerd.yml</code>
+<ul>
+<li>设置 <code>containerd_config_overwrite: false</code>, 如果同时使用 <code>gpu-operator</code> 必须，否则会导致 <code>default runtime</code> 改回 <code>runc</code> (⚠️： 初始化集群时应设置为true)</li>
+<li>使用上面设置同时需要应用 <a href="https://github.com/kubernetes-sigs/kubespray/pull/12278">PR</a></li>
+<li>设置 <code>containerd_discard_unpacked_layers: false</code>, 如果使用 Spegel (镜像 P2P 服务)必须</li>
+<li>设置 <code>containerd_registries_mirrors</code> 参见 <a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.28.0/inventory/mycluster/group_vars/all/containerd.yml">inventory/mycluster/group_vars/all/containerd.yml</a></li>
+</ul>
+</li>
+<li>修改 <code>inventory/mycluster/group_vars/all/offline.yml</code>
+<ul>
+<li>设置 <code>registry_host: "mir.blsc.cn"</code>, 为指定镜像仓库地址</li>
+<li>设置 <code>files_repo: "https://file.mir.blsc.cn/kubespray/2.28.0"</code>, 为指定镜像仓库地址</li>
+<li>解开注释与 <code>registry_host</code> 和 <code>files_repo</code> 相关的配置</li>
+<li>与 <code>registry_host</code> 相关的配置还需要添加源地址作为后缀</li>
+</ul>
+</li>
+<li>修改 <code>inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml</code>
+<ul>
+<li>设置 <code>kube_network_plugin: cilium</code>, 推荐</li>
+<li>设置 <code>kube_owner: root</code>, 使用 cilium 时必须</li>
+<li>设置 <code>kube_service_addresses: x.x.x.x/x</code>, 需要询问用户</li>
+<li>设置 <code>kube_pods_subnet: x.x.x.x/x</code>, 需要询问用户</li>
+<li>设置 <code>kube_proxy_strict_arp: true</code>，必须，因为使用 <code>kube-vip</code> 和 <code>metallb</code></li>
+<li>缺省开启 <code>coredns</code> 自动扩容和 <code>nodelocaldns</code>, 依赖所有节点能访问到 dns 服务器 (见 <code>upstream_dns_servers</code>)</li>
+<li>设置 <code>auto_renew_certificates: true</code> 开启自动更新证书, 推荐</li>
+<li>设置 <code>kubelet_config_extra_args: { runtimeRequestTimeout: 15m }</code>, 用于拉取大镜像容易超时的问题</li>
+</ul>
+</li>
+<li>修改 <code>inventory/mycluster/group_vars/k8s_cluster/k8s-net-cilium.yml</code>
+<ul>
+<li>设置 <code>cilium_enable_portmap: true</code> 支持 <code>container hostPort</code> 特性</li>
+<li>设置 <code>cilium_cni_exclusive: false</code>, 如果使用 RoCE 网络开启 multus 组件必须</li>
+</ul>
+</li>
+<li>修改 <code>inventory/mycluster/group_vars/k8s_cluster/addons.yml</code>
+<ul>
+<li>开启 metrics_server, 推荐</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">metrics_server_enabled:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">metrics_server_replicas:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">metrics_server_nodeselector:</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    node-role.kubernetes.io/control-plane:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ""</span></span></code></pre>
+<pre><code>* 开启 kube-vip，必须, 用于 k8s-apiserver 的负载均衡高可用
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_vip_enabled:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_vip_arp_enabled:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_vip_controlplane_enabled:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 联系网络管理员获取</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_vip_address:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> x.x.x.x</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">loadbalancer_apiserver:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    address:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "{{ kube_vip_address }}"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    port:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 6443</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># vip 所在的网卡名称</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_vip_interface:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond0</span></span></code></pre>
+<h2 id="可选">可选<a class="heading-anchor" aria-hidden tabindex="-1" href="#可选">#</a></h2>
+<ul>
+<li>修改 <code>inventory/mycluster/group_vars/all/all.yml</code>
+<ul>
+<li>如果需要代理访问外部网络 (常见使用 H100/B200 等禁止访问外面的环境), 则设置 <code>http_proxy</code>, <code>https_proxy</code> 和 <code>no_proxy</code>，<code>no_proxy</code> 通常可配置为 <code>127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,localhost,*.&#x3C;code>.&#x3C;region>.paratera.com</code>, 其中 <code>*.&#x3C;code>.&#x3C;region>.paratera.com</code> 替换为真实场景下给用户使用的域名，例如 <code>*.dev1.bz1.paratera.com</code></li>
+<li>如果节点未设置 NTP 服务, 则设置</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ntp_enabled:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ntp_manage_config:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ntp_servers:</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "ntp.aliyun.com iburst"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "ntp.tencent.com iburst"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ntp_timezone:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Asia/Shanghai</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ntp_force_sync_immediately:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span></code></pre>
+<ul>
+<li>修改 <code>inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml</code>
+<ul>
+<li>如果 OS 是非标准发行版此项必须, 添加 <code>kubeadm_ignore_preflight_errors: ["SystemVerification"]</code>,</li>
+<li>调度支持优先填充满一个 GPU 节点，添加如何如下配置</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kube_scheduler_profiles:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> schedulerName:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default-scheduler</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pluginConfig:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NodeResourcesFit</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">args:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    scoringStrategy:</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">    type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> MostAllocated</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    resources:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cpu</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">        weight:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> memory</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">        weight:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvidia.com/gpu</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">        weight:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 5</span></span></code></pre>
+<pre><code>* 设置 `supplementary_addresses_in_ssl_keys: [10.0.0.1]`，额外为访问 `api-server` 配置 SAN
+</code></pre>

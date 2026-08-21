@@ -1,0 +1,27 @@
+<h1 id="victoria-metrics">Victoria Metrics<a class="heading-anchor" aria-hidden tabindex="-1" href="#victoria-metrics">#</a></h1>
+<p>提供兼容 Prometheus 的 Metrics 监控栈</p>
+<ul>
+<li>
+<p>修改 <code>values.yml</code> 中的值以符合实际情况</p>
+<ul>
+<li><code>grafana.adminPassword</code></li>
+<li><code>grafana.ingress.hosts</code> 和 <code>grafana.ingress.tls.hosts</code></li>
+</ul>
+</li>
+<li>
+<p>部署</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 prometheus crd (https://docs.victoriametrics.com/operator/integrations/prometheus/)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> prometheus</span></span></code></pre>
+<ul>
+<li>
+<p>访问 <a href="https://gf.dev1.bz1.paratera.com">https://gf.dev1.bz1.paratera.com</a> (使用上述修改后的域名地址)</p>
+</li>
+<li>
+<p>卸载</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

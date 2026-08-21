@@ -1,0 +1,54 @@
+<h1 id="dex-connector-配置改动启用-adapter-时">Dex Connector 配置改动（启用 Adapter 时）<a class="heading-anchor" aria-hidden tabindex="-1" href="#dex-connector-配置改动启用-adapter-时">#</a></h1>
+<p>把 <code>my-kubeflow/dex/dex-config-patch.yaml</code> 的 IAM connector 段改为：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">connectors</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">- </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">type</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">oidc</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  id</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">seres-iam</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">集团-AI训推平台</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  config</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # issuer 保持 IAM 真实值（token 校验时 iss claim 必须匹配）</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    issuer</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">https://iam.seres.cn/idp/api/v3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    clientID</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">$IAM_CLIENT_ID</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    clientSecret</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">$IAM_CLIENT_SECRET</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    redirectURI</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">https://staii.seres.cn/dex/callback</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # ★★ 关键：用 Dex 原生的 discovery override 把 authorize 端点指向 adapter</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # adapter 会改写 scope 后 302 跳到 IAM 真实地址</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # token / jwks 端点不覆盖，Dex 仍直连 IAM</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    providerDiscoveryOverrides</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      authURL</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">https://staii.seres.cn/oidc-authorize-scope-rewriter/authorize</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # scopes 保持现状即可；rewriter 会统一改成 scope=openid</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # - scopes: []        → Dex 可能生成 openid+profile+email</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # - scopes: [openid]  → Dex v2.45 可能生成 openid+openid</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # 两种都会被 rewriter 改为单一 openid</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    scopes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: []</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    insecureSkipEmailVerified</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    userIDKey</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">sub</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    userNameKey</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">sub</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    getUserInfo</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span></span></code></pre>
+<h2 id="改动差异">改动差异<a class="heading-anchor" aria-hidden tabindex="-1" href="#改动差异">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">   config:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     issuer: https://iam.seres.cn/idp/api/v3</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     clientID: $IAM_CLIENT_ID</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     clientSecret: $IAM_CLIENT_SECRET</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     redirectURI: https://staii.seres.cn/dex/callback</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    scopes: []</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    providerDiscoveryOverrides:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+      authURL: https://staii.seres.cn/oidc-authorize-scope-rewriter/authorize</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     scopes: []</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     insecureSkipEmailVerified: true</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     userIDKey: sub</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     userNameKey: sub</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     getUserInfo: false</span></span></code></pre>
+<h2 id="部署后验证">部署后验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署后验证">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. Dex 重载配置后日志确认 connector 加载成功</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/dex</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tail=20</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -E</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "connector|seres-iam"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 看 Dex 实际生成的 302 Location（应指向 adapter）</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 浏览器开 DevTools Network 标签，访问 https://staii.seres.cn/，</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 点 "集团-AI训推平台" 登录按钮，看跳转链：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   Dex /dex/auth/seres-iam → 302 → staii.seres.cn/oidc-authorize-scope-rewriter/authorize?...&#x26;scope=openid+profile+email</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   或 Dex v2.45 在 scopes: [openid] 时生成 scope=openid+openid</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   adapter → 302 → iam.seres.cn/idp/authCenter/authenticate?...&#x26;scope=openid</span></span></code></pre>

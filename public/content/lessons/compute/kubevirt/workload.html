@@ -1,0 +1,49 @@
+<h1 id="workload">Workload<a class="heading-anchor" aria-hidden tabindex="-1" href="#workload">#</a></h1>
+<h2 id="安装-virtctl-客户端工具">安装 virtctl 客户端工具<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装-virtctl-客户端工具">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># macOS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">brew</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virtctl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -h</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># krew</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> krew</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virtctl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virt</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -h</span></span></code></pre>
+<h2 id="简单示例">简单示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#简单示例">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建虚拟机</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cirros.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vmi</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 连接控制台</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> console</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cirros</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 ssh 连接, 密码 gocubsgo</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ssh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cirros@vmi/cirros</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 vnc 连接, 需要安装 remote-viewer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">brew</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tap</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jeffreywildman/homebrew-virt-manager</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">brew</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> remote-viewer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vnc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cirros</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 vnc 自定义客户端连接</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vnc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --proxy-only</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cirros</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 输出示例：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Listening on 127.0.0.1:62316</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 然后使用 vnc 客户端连接 127.0.0.1:62316</span></span></code></pre>
+<p>故障排查:</p>
+<ul>
+<li>调度失败 (0/4 nodes are available: 1 Insufficient devices.kubevirt.io/kvm)
+如果出现无法调度的问题，通常是因为节点不支持硬件虚拟化（KVM）。在开发环境中，可以通过开启软件模拟来解决，编辑 <code>cluster/kubevirt.yaml</code> 文件，取消 <code>useEmulation</code> 的注释，然后重新部署：</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster/kubevirt.yaml</span></span></code></pre>
+<h2 id="复杂示例">复杂示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#复杂示例">#</a></h2>
+<p>依赖：</p>
+<ul>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/kubevirt/storage/cdi">cdi</a></li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建虚拟机</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fedora.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动虚拟机</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> start</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fedora</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 ssh 连接</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ssh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> myuser@vmi/fedora</span></span></code></pre>

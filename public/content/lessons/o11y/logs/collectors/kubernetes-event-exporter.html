@@ -1,0 +1,109 @@
+<h1 id="kubernetes-event-exporter">kubernetes-event-exporter<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubernetes-event-exporter">#</a></h1>
+<h2 id="介绍">介绍<a class="heading-anchor" aria-hidden tabindex="-1" href="#介绍">#</a></h2>
+<p>kubernetes-event-exporter 是一个用于收集 Kubernetes 集群事件并导出到指定存储的组件。它通过监听 Kubernetes API Server 的事件，将事件数据导出到指定的存储系统中，如 Elasticsearch、InfluxDB 等。</p>
+<h2 id="功能">功能<a class="heading-anchor" aria-hidden tabindex="-1" href="#功能">#</a></h2>
+<ul>
+<li>收集 Kubernetes 集群事件</li>
+<li>将事件数据导出到指定的存储系统</li>
+<li>支持多种存储系统，如 Elasticsearch、InfluxDB 等</li>
+<li>支持自定义事件过滤和转换规则</li>
+<li>支持多租户和集群管理</li>
+</ul>
+<h2 id="安装更新">安装&#x26;更新<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装更新">#</a></h2>
+<p>默认安装到 vm namespace</p>
+<pre><code>KUBECONFIG=... ./man upgrade
+</code></pre>
+<h2 id="访问">访问<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问">#</a></h2>
+<p>目前不提供 ingress，请使用 forward 暴露端口访问</p>
+<h2 id="事件映射">事件映射<a class="heading-anchor" aria-hidden tabindex="-1" href="#事件映射">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "metadata"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"apprepo-kubeapps-sync-bitnami-28746010-t9qnk.17ef94a0e4137bc0"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "namespace"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"kubeapps"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "uid"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"ef4bb79d-197d-4b64-b3d9-8ba089af8f46"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "resourceVersion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"148287483"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "creationTimestamp"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"2024-08-27T12:10:01Z"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "reason"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Failed"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "message"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Error: secret </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kubeapps-postgresql</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> not found"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "source"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: { </span><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">"component"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"kubelet"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">, </span><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">"host"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"cn001.dev.local"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "firstTimestamp"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"2024-08-27T12:10:01Z"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "lastTimestamp"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"2024-08-27T12:10:01Z"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "count"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">1</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "type"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Warning"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "eventTime"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">null</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "reportingComponent"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"kubelet"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "reportingInstance"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"cn001.dev.local"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "clusterName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">""</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "involvedObject"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "kind"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Pod"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "namespace"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"kubeapps"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"apprepo-kubeapps-sync-bitnami-28746010-t9qnk"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "uid"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"76859768-535c-4bc8-b617-38250e7ece78"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "apiVersion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"v1"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "resourceVersion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"148287461"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "fieldPath"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"spec.containers{sync}"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "labels"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "apprepositories.kubeapps.com/repo-name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"bitnami"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "apprepositories.kubeapps.com/repo-namespace"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"kubeapps"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "batch.kubernetes.io/controller-uid"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"92a3d524-d016-4c1f-827e-365adf4ae09d"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "batch.kubernetes.io/job-name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"apprepo-kubeapps-sync-bitnami-28746010"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "controller-uid"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"92a3d524-d016-4c1f-827e-365adf4ae09d"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "job-name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"apprepo-kubeapps-sync-bitnami-28746010"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "ownerReferences"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: [</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "apiVersion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"batch/v1"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "kind"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Job"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"apprepo-kubeapps-sync-bitnami-28746010"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "uid"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"92a3d524-d016-4c1f-827e-365adf4ae09d"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "controller"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">        "blockOwnerDeletion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    ],</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "deleted"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>    layout:</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>      cluster  : "{{ .ClusterName }}"</span></span>
+<span class="line"><span>      classify : "k8s-event"</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>      time     : "{{ .Metadata.CreationTimestamp.Format \"2006-01-02T15:04:05Z\" }}"</span></span>
+<span class="line"><span>      namespace: "{{ .InvolvedObject.Namespace }}"</span></span>
+<span class="line"><span>      msg      : "{{ .Message }}"</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>      start    : "{{ .FirstTimestamp }}"</span></span>
+<span class="line"><span>      end      : "{{ .LastTimestamp }}"</span></span>
+<span class="line"><span>      host     : "{{ .Source.Host }}"</span></span>
+<span class="line"><span>      component: "{{ .Source.Component }}"</span></span>
+<span class="line"><span>        </span></span>
+<span class="line"><span>      type     : "{{ .Type }}"</span></span>
+<span class="line"><span>      reason   : "{{ .Reason }}"</span></span>
+<span class="line"><span>      count    : "{{ .Count }}"</span></span>
+<span class="line"><span>      kind     : "{{ .InvolvedObject.Kind }}"</span></span>
+<span class="line"><span>      name     : "{{ .InvolvedObject.Name }}"</span></span>
+<span class="line"><span>      uid      : "{{ .InvolvedObject.UID }}"</span></span>
+<span class="line"><span>      apiVersion: "{{ .InvolvedObject.APIVersion }}"</span></span>
+<span class="line"><span>      resourceVersion : "{{ .InvolvedObject.ResourceVersion }}"</span></span>
+<span class="line"><span>      fieldPath: "{{ .InvolvedObject.FieldPath }}"</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>      labels: "{{ toJson .InvolvedObject.Labels}}"</span></span>
+<span class="line"><span>      ownerReferences: "{{ toJson .InvolvedObject.OwnerReferences }}"</span></span>
+<span class="line"><span>      deleted : "{{ .InvolvedObject.Deleted }}"</span></span></code></pre>
+<h2 id="vmui-查询---logsql">vmui 查询 - LogsQL<a class="heading-anchor" aria-hidden tabindex="-1" href="#vmui-查询---logsql">#</a></h2>
+<p><a href="https://docs.victoriametrics.com/victorialogs/logsql/">https://docs.victoriametrics.com/victorialogs/logsql/</a></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询所有</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">*</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询 component 为 kubelet 的事件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">component:</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">"kubelet"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询类型为 Normal 的事件</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">"Normal"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询类型为 Normal 且 component 为 kubelet 的事件</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">"Normal"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> AND</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> component:"kubelet"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># regexp 查询</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">component:~</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">"kubelet|deployment-controller"</span></span></code></pre>

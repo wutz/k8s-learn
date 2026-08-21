@@ -1,0 +1,72 @@
+<h1 id="存储">存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#存储">#</a></h1>
+<h2 id="本地存储">本地存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#本地存储">#</a></h2>
+<ul>
+<li>部署 <a href="/lessons/storage/local-storage">local-storage</a> 用于提供本地系统盘 csi 服务, 适合缓存数据或者支持 HA 的数据库使用</li>
+</ul>
+<h2 id="网络存储">网络存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#网络存储">#</a></h2>
+<p>根据实际情况，接入下面存储到 k8s 集群中:</p>
+<ul>
+<li>部署 <a href="/lessons/storage/juicefs-csi">juicefs-csi</a> 用于提供 JuiceFS 存储服务, 适合计算集群在云上，或者有外部提供 RDS 和对象存储的环境</li>
+<li>部署 Ceph CSI 存储 (如果使用 Rook 部署则不需要下面 CSI)
+<ul>
+<li>部署 <a href="/lessons/storage/ceph-csi-cephfs">ceph-csi-cephfs</a> 用于提供基于 Ceph 的文件系统存储服务</li>
+<li>部署 <a href="/lessons/storage/ceph-csi-rbd">ceph-csi-rbd</a> 用于提供基于 Ceph 的块存储服务</li>
+</ul>
+</li>
+<li>部署 <a href="/lessons/storage/nfs-csi">nfs-csi</a> 用于提供 NFS 存储服务, 适合外部带 HA 的 NAS 服务，或者自建无 HA 的 NFS Server 小规模环境或者开发环境</li>
+</ul>
+<p>如果没有为集群提供外部的网络存储，可以根据实际情况自行部署下面任意存储：</p>
+<ul>
+<li>部署 Ceph 存储
+<ul>
+<li>独立存储集群（不依赖 K8S）：使用 <a href="/lessons/storage/cephadm">cephadm</a> 部署 Ceph 集群</li>
+<li>存储与计算在同一集群: 部署 <a href="/lessons/storage/rook">rook</a> 用于提供基于 Ceph 的块存储，文件系统和对象存储服务</li>
+</ul>
+</li>
+<li>部署 <a href="/lessons/storage/gpfs">gpfs</a> 部署 GPFS 集群 (商业存储)</li>
+<li>部署 <a href="/lessons/storage/weka">weka</a> 部署 Weka 集群 (商业存储)</li>
+</ul>
+<h2 id="性能测试">性能测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能测试">#</a></h2>
+<p>使用 <a href="/lessons/storage/elbencho">elbencho</a> 测试存储性能</p>
+<h2 id="基本概念">基本概念<a class="heading-anchor" aria-hidden tabindex="-1" href="#基本概念">#</a></h2>
+<ul>
+<li>Volume: 容器中文件在磁盘中是临时存放的，当容器崩溃或者停止时容器中创建和修改的文件将会丢失，故而使用 Volume 解决这一问题
+<ul>
+<li>Ephemeral Volume 临时卷：与 Pod 生命周期相同, 在 Pod 停止会摧毁临时卷
+<ul>
+<li>emptyDir: 在 Pod 启动时为空，通常使用系统盘或者 RAM 中的空间</li>
+<li>configMap, secret: 提供将配置挂载进 Pod 中</li>
+</ul>
+</li>
+<li>Persistent Volume 持久卷：超出 Pod 生命周期, 在 pod 停止会继续保留持久卷
+<ul>
+<li>PV (PersistentVolume ): 可以把 PV 理解为集群中的一块存储。它是由集群管理员（Admin）创建和配置的，代表了一个真实的存储后端（如一块 NFS 目录、一个云硬盘）</li>
+<li>PVC (PersistentVolumeClaim): 可以把 PVC 理解为用户对存储的请求。它是由应用开发者或用户（User）创建的，用来向集群申请一块满足特定条件的存储。</li>
+<li>StorageClass
+<ul>
+<li>手动创建和管理大量的 PV 是一件非常繁琐的事情，StorageClass 的出现就是为了实现动态存储供应 (Dynamic Provisioning)</li>
+<li>StorageClass 定义了创建 PV 的“模板”或“类别”，它告诉 Kubernetes 如何去自动创建一个 PV</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>CSI (Container Storage Interface): CSI 是一个标准化的接口，旨在将第三方存储系统与 Kubernetes 等容器编排系统解耦</li>
+</ul>
+<p>使用流程:</p>
+<ul>
+<li>管理员视角
+<ul>
+<li>部署存储厂商提供的 CSI 驱动。</li>
+<li>创建一个 StorageClass，指向该 CSI 驱动，并定义好存储的类型和参数。</li>
+</ul>
+</li>
+<li>用户视角
+<ul>
+<li>创建一个 PVC，请求一定量的存储，并指定使用哪个 StorageClass。</li>
+<li>（后台自动发生）K8S 通过 SC 调用 CSI 驱动，动态创建一个 PV 并与 PVC 绑定。</li>
+<li>在 Pod 的定义中，通过 volumes 字段引用这个 PVC 的名称，然后通过 volumeMounts 挂载到容器的指定路径。</li>
+</ul>
+</li>
+</ul>

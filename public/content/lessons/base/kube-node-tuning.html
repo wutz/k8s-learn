@@ -1,0 +1,17 @@
+<h1 id="kube-node-tuning">kube-node-tuning<a class="heading-anchor" aria-hidden tabindex="-1" href="#kube-node-tuning">#</a></h1>
+<p><a href="https://github.com/kubean-io/kube-node-tuning">kube-node-tuning</a> 旨在通过 Kubernetes 进行内核调优。它适用于：</p>
+<ul>
+<li>高性能应用</li>
+<li>大规模集群</li>
+<li>网络调优</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="验证">验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证">#</a></h2>
+<p>通过 SSH 访问节点，查看配置：</p>
+<ul>
+<li>执行 <code>cat /etc/sysctl.d/99-kube-node-tuning.conf</code> 配置文件内容</li>
+<li>执行 <code>sysctl -a</code> 查看生效参数</li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

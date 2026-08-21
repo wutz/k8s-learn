@@ -1,0 +1,73 @@
+<h1 id="vast">Vast<a class="heading-anchor" aria-hidden tabindex="-1" href="#vast">#</a></h1>
+<p>Vast 是统一存储系统，类似 Ceph 可以提供文件系统，块存储和对象存储服务</p>
+<h2 id="添加集群连接信息">添加集群连接信息<a class="heading-anchor" aria-hidden tabindex="-1" href="#添加集群连接信息">#</a></h2>
+<p>从租户管理员获取信息，修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/vast/cluster/kustomization.yaml">cluster</a>:</p>
+<ul>
+<li>自定义 secret name: 格式推荐 <code>&#x3C;cluster>-&#x3C;tenant></code>, 例如 <code>bz1-vast1-test1</code></li>
+<li>endpoint: 集群控制 API 的地址, 例如 <code>vms.vast1.bz1.paratera.com</code></li>
+<li>tenant: 分配的租户名称, 例如 <code>test1</code></li>
+<li>username &#x26; password: 连接租户的用户名和密码</li>
+</ul>
+<p>执行 <code>kubectl apply -k cluster</code> 部署连接集群的 secret</p>
+<h2 id="nfs-csi">NFS CSI<a class="heading-anchor" aria-hidden tabindex="-1" href="#nfs-csi">#</a></h2>
+<p>主要提供 NFS 服务的 CSI，相比社区 NFS CSI 支持 Quota 和 QoS 等高级特性</p>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/vast/nfs/values.yml">nfs values</a> 中 storageClasses 下配置</p>
+<ul>
+<li>key: 表示创建的 storageClassName, 例如 <code>shared-vast</code></li>
+<li>secretName: 集群租户的 API 服务连接信息，见 "添加集群连接信息"</li>
+<li>vipPoolFQDN: nfs 挂载 server 地址名称（被DNS解析），例如 <code>main.vast1.bz1.paratera.com</code></li>
+<li>vipPoolFQDNRandomPrefix: 是否在 vipPoolFQDN 前面添加随机前缀，使用外置 DNS 解析时(当前使用此方式), 必须设置 <code>false</code></li>
+<li>storagePath: 租户内唯一 path，可以根据业务和集群名称等自定义, 由 CSI 自动创建，推荐使用格式 <code>/&#x3C;cluster>/&#x3C;fs></code>, 例如 <code>/dev1/fs1</code></li>
+<li>viewPolicy: 租户管理员预创建的 nfs 访问策略，通常用于允许哪些 client ip 挂载文件系统, 推荐格式使用 <code>&#x3C;cluster></code>, 例如 <code>dev1</code></li>
+<li>qosPolicy: 租户管理预创建的缺省 QoS 策略，通常为租户的名称，例如 <code>test1</code>, 缺省为 BW：1GB/s, IOPS: 10000</li>
+<li>mountOptions: 性能优化挂载选项
+<ul>
+<li><code>vers=3</code> 使用 nfs 3 版本, 无状态，数据一致性好</li>
+<li><code>nconnect=16</code> nfs 连接 server 的 tcp 连接数量，用于提升吞吐</li>
+</ul>
+</li>
+</ul>
+<p>部署：</p>
+<pre><code>cd nfs
+helmwave up -d
+</code></pre>
+<p>测试:</p>
+<pre><code># 部署 PVC
+kubectl apply -f tests/pvc.yaml
+# 测试 PVC
+kubectl exec -it tests-vast-nfs-pod -- sh
+</code></pre>
+<h2 id="block-csi">Block CSI<a class="heading-anchor" aria-hidden tabindex="-1" href="#block-csi">#</a></h2>
+<p>前置依赖：</p>
+<ul>
+<li>安装 nvme-cli 工具 <code>apt install -y nvme-cli</code></li>
+</ul>
+<p>主要提供块存储服务 CSI</p>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/vast/block/values.yml">block values</a> 中 storageClasses 下配置:</p>
+<ul>
+<li>key: 表示创建的 storageClassName, 例如 <code>block-vast</code></li>
+<li>secretName: 集群租户的 API 服务连接信息，见文档开始</li>
+<li>vipPoolFQDN: nfs 挂载 server 地址名称（被DNS解析），例如 <code>test1.vast1.bz1.paratera.com</code></li>
+<li>storagePath: 租户管理员创建，租户内唯一 path，可以根据业务和集群名称等自定义, 推荐使用格式 <code>/&#x3C;cluster>/&#x3C;block></code>, 例如 <code>/dev1/block1</code></li>
+<li>viewPolicy: 租户管理预创建的访问策略，推荐格式使用 <code>&#x3C;cluster></code>, 例如 <code>dev1</code></li>
+<li>qosPolicy: 当前版本不支持，下一版本 Vast 5.4 支持，租户管理预创建的缺省 QoS 策略，缺省为 BW：1GB/s, IOPS: 10000</li>
+<li>subsystem: 租户管理员分配的 NVMe 命名空间名称，推荐格式 <code>&#x3C;cluster>-&#x3C;block></code>，例如 <code>dev1-block1</code></li>
+<li>snapshotClasses（可选）: 支持快照，填写集群租户的 API 服务连接信息，见文档开始，依赖部署 <a href="/lessons/storage/volumesnapshots">volumesnapshots CRDs</a></li>
+</ul>
+<p>部署：</p>
+<pre><code>cd block
+helmwave up -d
+</code></pre>
+<p>测试:</p>
+<pre><code># 部署 PVC
+kubectl apply -f tests/pvc.yaml
+# 测试 PVC
+kubectl exec -it tests-vast-block-pod -- sh
+
+# 部署快照
+kubectl apply -f tests/pvc-snap.yaml
+# 部署克隆
+kubectl apply -f tests/pvc-snap-clone.yaml
+# 测试克隆
+kubectl exec -it tests-vast-block-pod-clone -- sh
+</code></pre>

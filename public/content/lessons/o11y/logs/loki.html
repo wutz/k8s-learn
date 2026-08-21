@@ -1,0 +1,33 @@
+<h2 id=""></h2>
+<p>loki + promtail</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<h3 id="loki">loki<a class="heading-anchor" aria-hidden tabindex="-1" href="#loki">#</a></h3>
+<p>loki 的部署具有多个模式：</p>
+<ul>
+<li>single-binary：单进程模式，所有的功能模块均部署到单一进程中，可以多实例部署（需要对象存储支持）</li>
+<li>simple-scalable：简易扩展模式，功能分为三类：read，write，backend，可以单独扩展，需要对象存储支持</li>
+<li>distributed：全分布式模式，每个功能模块均以独立的进程部署，可以单独扩展，需要对象存储支持</li>
+</ul>
+<blockquote>
+<p>注意：只有 single-binary 模式且 replica 为 1 时，支持使用 filesystem 作为存储后端，其它的模式均需要使用对象存储(如 s3, gcs, azure 等)</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单独编译 loki manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tags</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单独编译 promtail manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tags</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> promtail</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 编译 所有 manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --yml</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单独提交 loki manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tags</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单独提交 promtail manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tags</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> promtail</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交 所有已编译的 manifests</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">~/.kube/...</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span></span></code></pre>

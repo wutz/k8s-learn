@@ -1,0 +1,49 @@
+<h1 id="metallb">MetalLB<a class="heading-anchor" aria-hidden tabindex="-1" href="#metallb">#</a></h1>
+<p><a href="https://github.com/metallb/metallb">MetalLB</a> 是一个用于裸金属 Kubernetes 集群的负载均衡器实现，它使用标准的路由协议。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待所有 pod 就绪</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> metallb-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app.kubernetes.io/instance=metallb</span></span></code></pre>
+<p>根据实际情况修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/metallb/default-pool.yaml">default-pool.yaml</a> 中的 IP 地址池和其所在的 interface</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<h2 id="查看-metallb-vip-pool">查看 metallb vip pool<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看-metallb-vip-pool">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ipaddresspools</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> metallb-system</span></span></code></pre>
+<h2 id="查看已经使用的-vip">查看已经使用的 vip<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看已经使用的-vip">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> services</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --all-namespaces</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.items[*].status.loadBalancer.ingress[*].ip}'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> tr</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ' '</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '\n'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sort</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span></span></code></pre>
+<h2 id="使用">使用<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署测试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除测试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<h2 id="排错">排错<a class="heading-anchor" aria-hidden tabindex="-1" href="#排错">#</a></h2>
+<p>参考 <a href="https://metallb.io/troubleshooting/">Troubleshooting</a></p>
+<ul>
+<li>确保 speaker 运行节点未设置 <code>node.kubernetes.io/exclude-from-external-load-balancers</code> 标签</li>
+<li>metallb 查询 vip 分配在那个节点有 3 种方法：
+<ul>
+<li>较新 metallb 版本执行 <code>kubectl get servicel2statuses.metallb.io -n metallb-system</code></li>
+<li>arp 方式检查
+<ul>
+<li>arping <vip> 获取 <mac>，其中有 2 种可能没有响应或者 timeout</li>
+<li>vip 工作不正常，可以 telnet <vip> &#x3C;服务端口> 判断</li>
+<li>vip 就在当前节点上</li>
+<li>arp -n |grep <mac> 获取 2 个 ip，其中一个是物理节点 ip</li>
+</ul>
+</li>
+<li>查询 metallb speaker 日志 <code>kubectl logs &#x3C;speaker-pod> |grep serviceAnnounced |grep &#x3C;vip></code> , 然后根据查询 pod 获取所在节点</li>
+</ul>
+</li>
+<li>抓包分析：</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果 vip 跑在 bond0 上，则在 speaker 上抓包</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tcpdump</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> arp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> and</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> host</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 10.254.41.201</span></span></code></pre>
+<ul>
+<li>当 Service 设置 <code>externalTrafficPolicy: local</code> 时，speaker 必须运行在对应后端 Pod 节点上（否则不会宣告 VIP），并且只有高可用没有负载均衡作用，这种模式主要用户保留客户端 IP</li>
+</ul>

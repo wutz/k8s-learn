@@ -1,0 +1,59 @@
+<h1 id="永久下线一个节点">永久下线一个节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#永久下线一个节点">#</a></h1>
+<p>本章节描述如何永久下线一个节点。</p>
+<p>永久下线一个节点通常是更换整个服务器的情况。</p>
+<p>下线节点需要注意如下几点：</p>
+<ol>
+<li>确保集群中有足够的存储空间容纳被下线节点的数据。</li>
+<li>下线节点会直接触发Region的迁移，请在集群不忙的时候进行。</li>
+<li>确认其他TiKV节点的状态是正常的。</li>
+<li>下线的操作根据需要迁移Region的数量和大小会耗时几分钟 至 数小时不等。</li>
+</ol>
+<h1 id="一下线节点">一、下线节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#一下线节点">#</a></h1>
+<p>下线节点前需要确认节点的信息，执行如下命令获取</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster display tikv                                                                                                                                 tikv01.dev1.lab: Tue Nov 19 14:19:19 2024</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> type:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       tidb</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       tikv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> version:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    v8.1.1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Deploy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        tikv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">SSH</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> type:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           builtin</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Dashboard</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> URL:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      http://172.19.12.1:2379/dashboard</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Grafana</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> URL:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        http://172.19.12.1:3000</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ID</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                Role</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        Host</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        Ports</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        OS/Arch</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       Status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   Data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Dir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                    Deploy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Dir</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">--</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">                ----</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        ----</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        -----</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        -------</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       ------</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">   --------</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">                    ----------</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">...</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">172.19.12.1:20160</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  tikv</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        172.19.12.1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  20160/20180</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  linux/x86_64</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Up</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       /tikv/data/tikv-20160</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       /tikv/deploy/tikv-20160</span></span></code></pre>
+<p>假设要下线172.19.12.1:20160节点，执行如下命令</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster scale-in tikv -N 172.19.12.1:20160</span></span>
+<span class="line"></span></code></pre>
+<p>服务器下线的过程总节点的状态会经历Pending Offline -> Tombstone 两个阶段。</p>
+<p>当节点达到Tombstone状态后，需要执行如下命令把节点真正从集群中删除。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># # tiup cluster prune tikv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">+</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [ </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Serial</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> SSHKeySet:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> privateKey=/root/.tiup/storage/cluster/clusters/tikv/ssh/id_rsa,</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> publicKey=/root/.tiup/storage/cluster/clusters/tikv/ssh/id_rsa.pub</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">+</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [Parallel] - UserSSH: </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">user</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">tikv,</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> host</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">172.19.12.1</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">...</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">+</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [ </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Serial</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> FindTomestoneNodes</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Will</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> destroy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> these</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes:</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [172.19.12.1:20160]</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Do</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> you</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> confirm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> this</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> action?</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> [y/N]:(</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">default</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">N</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">) y 输入y同意</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">``</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">上述命名完成后通过tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> display</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv命令查看集群的状态，已经看不到被显现的节点</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 二、上线新节点</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">当有新服务器可以加入到该集群的时候，执行如下命令</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">这里假设新服务器的地址为172.18.12.5</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">这里与节点扩容的方式一致，先编写节点信息保存到scale-out-tikv.yaml文件中</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">```</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">toml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tikv_servers:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> host: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">172.19.12.5</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">    resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">      memory_limit:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "64G"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">      cpu_quota:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "1600%"</span></span></code></pre>
+<p>执行如下命令进行节点的扩容</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster scale-out tikv01 scale-out-tikv.yaml</span></span></code></pre>
+<p>如果上述命令输出没有报错可以执行如下命令确认节点是否已添加完成。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tiup cluster display tikv</span></span></code></pre>

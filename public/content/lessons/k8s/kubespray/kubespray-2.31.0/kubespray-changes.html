@@ -1,0 +1,1244 @@
+<h1 id="kubespray-v230v231-升级影响评估与检查清单">Kubespray v2.30→v2.31 升级影响评估与检查清单<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubespray-v230v231-升级影响评估与检查清单">#</a></h1>
+<blockquote>
+<p>发布日期: 2026-04-25 | 默认 K8s 版本: v1.35.4</p>
+<p><strong>适用范围</strong>: 使用 Kubespray 从 v2.30 升级到 v2.31 的 Kubernetes 集群</p>
+<p><strong>常见场景</strong>: Ubuntu 22.04 / containerd / kube-proxy / 常见 Ingress 方案</p>
+</blockquote>
+<hr>
+<h2 id="一影响评估总览">一、影响评估总览<a class="heading-anchor" aria-hidden tabindex="-1" href="#一影响评估总览">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>变更项</th>
+<th>影响</th>
+<th>类型</th>
+<th>详述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cgroup v1 默认拒绝启动</td>
+<td>⚠️ 最高</td>
+<td>K8s 上游</td>
+<td>三.2</td>
+</tr>
+<tr>
+<td>ingress-nginx addon 移除</td>
+<td>⚠️ 高</td>
+<td>Kubespray</td>
+<td>二.1.1</td>
+</tr>
+<tr>
+<td>etcd 3.5→3.6 大版本升级</td>
+<td>⚠️ 高</td>
+<td>上游组件</td>
+<td>三.3</td>
+</tr>
+<tr>
+<td>Dashboard addon 移除</td>
+<td>中</td>
+<td>Kubespray</td>
+<td>二.1.2</td>
+</tr>
+<tr>
+<td>移除 <code>--pod-infra-container-image</code></td>
+<td>中</td>
+<td>K8s 上游</td>
+<td>三.2</td>
+</tr>
+<tr>
+<td>IPVS kube-proxy 废弃</td>
+<td>中</td>
+<td>K8s 上游</td>
+<td>三.2</td>
+</tr>
+<tr>
+<td>废弃变量自动检测</td>
+<td>中</td>
+<td>Kubespray</td>
+<td>二.1.3</td>
+</tr>
+<tr>
+<td>bastion 变量硬性重命名</td>
+<td>低</td>
+<td>Kubespray</td>
+<td>二.1.4</td>
+</tr>
+<tr>
+<td>containerd 2.2.1→2.2.3</td>
+<td>低</td>
+<td>上游组件</td>
+<td>三.4</td>
+</tr>
+<tr>
+<td>runc 1.3.4→1.4.2</td>
+<td>低</td>
+<td>上游组件</td>
+<td>三.4</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>阅读建议:</strong> ⚠️最高/高的条目务必详读对应章节；中等条目视集群配置决定；低等级可快速浏览。</p>
+</blockquote>
+<hr>
+<h2 id="二kubespray-变更">二、Kubespray 变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#二kubespray-变更">#</a></h2>
+<h3 id="21-破坏性变更">2.1 破坏性变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#21-破坏性变更">#</a></h3>
+<h4 id="211-ingress-nginx-addon-被移除">2.1.1 ingress-nginx addon 被移除<a class="heading-anchor" aria-hidden tabindex="-1" href="#211-ingress-nginx-addon-被移除">#</a></h4>
+<p><strong>Kubespray 移除范围 (PR #12767):</strong></p>
+<p>删除了整个 <code>roles/kubernetes-apps/ingress_controller/ingress_nginx/</code> 子角色，包括：</p>
+<ul>
+<li><code>defaults/main.yml</code>（变量定义: <code>ingress_nginx_enabled</code>、镜像版本等）</li>
+<li><code>tasks/main.yml</code>（部署任务）</li>
+<li>17 个 Jinja2 模板（Namespace、RBAC、ConfigMap、Deployment、Service、IngressClass、Admission Webhook 等）</li>
+<li><code>docs/ingress/ingress_nginx.md</code> 文档</li>
+<li><code>ingress_nginx_enabled</code> 变量引用（addons.yml、download.yml、main.yml）</li>
+<li>共 33 个文件变更，删除 1034 行，仅新增 12 行</li>
+</ul>
+<p><strong>上游归档经过:</strong></p>
+<table>
+<thead>
+<tr>
+<th>时间</th>
+<th>事件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2025-11-11</td>
+<td>SIG Network + 安全委员会发布官方博客宣布退役</td>
+</tr>
+<tr>
+<td>2026-03-24</td>
+<td>kubernetes/ingress-nginx 仓库正式归档（19.5k stars, 8432 commits）</td>
+</tr>
+<tr>
+<td>2026-03-24</td>
+<td>替代方案 InGate (kubernetes-sigs/ingate) 也同步归档（仅 49 commits）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>根因:</strong> 长期仅 1-2 人业余维护；snippets 注入等"灵活性"特性成为不可偿还的安全债务。</p>
+<p><strong>替代方案（按集群现状选择）:</strong></p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>Ingress v1 兼容</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Istio Ingressgateway</strong>（已部署 Istio 时）</td>
+<td>是</td>
+<td>已有 Istio 的集群</td>
+</tr>
+<tr>
+<td><strong>Gateway API</strong>（官方推荐方向）</td>
+<td>否，需重写为 HTTPRoute</td>
+<td>新项目、长期规划</td>
+</tr>
+<tr>
+<td>Traefik IngressController</td>
+<td>是</td>
+<td>无服务网格需求</td>
+</tr>
+<tr>
+<td>HAProxy Ingress</td>
+<td>是</td>
+<td>无服务网格需求</td>
+</tr>
+<tr>
+<td>Envoy Gateway</td>
+<td>否</td>
+<td>需要 Envoy 但不需要 Istio</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Istio Ingressgateway 作为过渡方案的注意事项:</strong></p>
+<p>Istio ingressgateway 可作为过渡方案承接 Kubernetes Ingress v1 API，但不能假设现有 Ingress 只需切换 <code>ingressClassName</code> 即可无缝迁移。官方更推荐长期迁移到 Gateway API，且需要逐项核对 path 匹配语义、TLS Secret 所在 namespace，以及 nginx annotation 的等价配置。</p>
+<ol>
+<li>创建 IngressClass:</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">networking.k8s.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">IngressClass</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">istio</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  controller</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">istio.io/ingress-controller</span></span></code></pre>
+<ol start="2">
+<li>
+<p>对结构简单的 Ingress，建议先在非生产环境验证 <code>ingressClassName: nginx</code> → <code>ingressClassName: istio</code></p>
+</li>
+<li>
+<p>对 nginx 专属 annotation，需迁移到 Istio 原生配置或 Gateway API 对应能力，并逐条验证行为一致性</p>
+</li>
+</ol>
+<p><strong>nginx annotation → Istio 映射:</strong></p>
+<table>
+<thead>
+<tr>
+<th>nginx Annotation</th>
+<th>Istio 替代</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/rewrite-target</code></td>
+<td>VirtualService rewrite 或 HTTPRoute filter</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/ssl-redirect</code></td>
+<td>Gateway TLS 配置或 VirtualService redirect</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/proxy-body-size</code></td>
+<td>通常需 EnvoyFilter 或网关/代理层专门配置</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/auth-type</code></td>
+<td>RequestAuthentication / AuthorizationPolicy</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/cors-*</code></td>
+<td>VirtualService corsPolicy</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/canary</code></td>
+<td>VirtualService 流量权重分配</td>
+</tr>
+<tr>
+<td><code>nginx.ingress.kubernetes.io/custom-snippets</code></td>
+<td>EnvoyFilter（需更多专业知识）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>长期建议:</strong> 渐进迁移到 Gateway API（Gateway + HTTPRoute）。Kubespray v2.31.0 的 <code>addons.yml</code> 中有 <code>gateway_api_enabled: false</code>，设为 <code>true</code> 可安装 Gateway API CRDs（仅安装 CRDs，不包含具体网关控制器）。</p>
+<blockquote>
+<p>注意: 现有部署不会立刻中断，Helm chart 和容器镜像仍然可用，但不再有安全修复。</p>
+</blockquote>
+<hr>
+<h4 id="212-kubernetes-dashboard-addon-被移除">2.1.2 Kubernetes Dashboard addon 被移除<a class="heading-anchor" aria-hidden tabindex="-1" href="#212-kubernetes-dashboard-addon-被移除">#</a></h4>
+<ul>
+<li>kubernetes/dashboard 于 2026-01-21 归档（已迁移至 <code>kubernetes-retired/dashboard</code>）</li>
+<li>原因: 缺乏活跃维护者和贡献者</li>
+</ul>
+<p><strong>替代方案:</strong></p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Headlamp</strong>（官方推荐）</td>
+<td>kubernetes-sigs/headlamp，6.2k stars，活跃维护，有 Helm chart，支持插件/桌面端/集群内部署</td>
+</tr>
+<tr>
+<td>Lens (Mirantis)</td>
+<td>桌面 K8s IDE（专有）</td>
+</tr>
+<tr>
+<td>Portainer</td>
+<td>通用容器管理 UI</td>
+</tr>
+</tbody>
+</table>
+<p><code>dashboard_enabled: true</code> 配置不再有效。</p>
+<hr>
+<h4 id="213-废弃变量自动检测">2.1.3 废弃变量自动检测<a class="heading-anchor" aria-hidden tabindex="-1" href="#213-废弃变量自动检测">#</a></h4>
+<p><strong>新增自动化验证角色 (PR #12942)</strong></p>
+<p>在 <code>validate_inventory</code> 角色中新增 "Fail if removed variables are used" 任务，作为 playbook 启动前的第一道 inventory 检查。</p>
+<p><strong>要点:</strong></p>
+<ul>
+<li>使用 Ansible <code>query('varnames', ...)</code> 检查 inventory/extra-vars 中是否定义了已移除变量</li>
+<li><code>run_once: true</code>，每个 play 只执行一次</li>
+<li>不依赖 gathered facts，只检查变量定义</li>
+<li>当前正则写法为 <code>^var1|var2$</code>，严格说不是精确匹配；但 v2.31.0 仅检查 1 个变量，当前不会造成误判</li>
+</ul>
+<p><strong>v2.31.0 当前检测列表:</strong></p>
+<table>
+<thead>
+<tr>
+<th>已移除变量</th>
+<th>移除版本</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kubelet_static_pod_path</code></td>
+<td>2.31.0</td>
+<td>开发周期内引入后即移除，不再存在</td>
+</tr>
+</tbody>
+</table>
+<p><strong>如果检测到已移除变量:</strong> playbook 立即中止，必须在 inventory 中清理该变量后才能继续运行。</p>
+<blockquote>
+<p>来源: PR #12942 | Issue #11039</p>
+</blockquote>
+<hr>
+<h4 id="214-变量重命名-ssh_bastion_confing__name--ssh_bastion_config_name">2.1.4 变量重命名: ssh_bastion_confing__name → ssh_bastion_config_name<a class="heading-anchor" aria-hidden tabindex="-1" href="#214-变量重命名-ssh_bastion_confing__name--ssh_bastion_config_name">#</a></h4>
+<p><strong>硬性变更，无过渡期 (PR #13046)</strong></p>
+<p>原变量名同时包含拼写错误 <code>confing</code> 和多余双下划线 <code>__</code>，现统一修正为 <code>ssh_bastion_config_name</code>。</p>
+<p><strong>影响评估:</strong></p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>未使用过此变量</td>
+<td>无影响</td>
+</tr>
+<tr>
+<td>使用了默认值</td>
+<td>无影响（新变量默认值相同）</td>
+</tr>
+<tr>
+<td>在 inventory 中覆盖了 <code>ssh_bastion_confing__name</code></td>
+<td><strong>必须改名为</strong> <code>ssh_bastion_config_name</code>，否则覆盖静默失效</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>来源: PR #13046 | Issue #13032</p>
+</blockquote>
+<hr>
+<h3 id="22-新特性与改进">2.2 新特性与改进<a class="heading-anchor" aria-hidden tabindex="-1" href="#22-新特性与改进">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>变更</th>
+<th>说明</th>
+<th>PR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Structured AuthenticationConfiguration</td>
+<td>kube-apiserver 支持结构化认证配置文件（K8s 1.30+ 新认证机制）</td>
+<td>#13035</td>
+</tr>
+<tr>
+<td>kube-vip BGP source selection</td>
+<td>新增 <code>kube_vip_bgp_sourceip</code> / <code>kube_vip_bgp_sourceif</code>（互斥）</td>
+<td>#13044</td>
+</tr>
+<tr>
+<td><code>coredns_svc_name</code></td>
+<td>CoreDNS 服务名可自定义</td>
+<td>#12951</td>
+</tr>
+<tr>
+<td><code>fs.inotify.max_user_instances</code> 默认 8192</td>
+<td>原值偏低，高 Pod 密度场景易触发上限</td>
+<td>#13075</td>
+</tr>
+<tr>
+<td>custom_cni Helm <code>create_namespace</code></td>
+<td>自定义 CNI 用 Helm 部署时支持自动创建 ns</td>
+<td>#13061</td>
+</tr>
+<tr>
+<td>Fedora 41/42 支持</td>
+<td>新增 OS 支持</td>
+<td>#12138, #12989</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="23-架构设计变更">2.3 架构/设计变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#23-架构设计变更">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>变更</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container engine 从 <code>import</code> 改为 <code>include</code></td>
+<td>避免大量被跳过的 task，提升 playbook 执行速度</td>
+</tr>
+<tr>
+<td>Network plugin 从 <code>import</code> 改为 <code>include</code></td>
+<td>同上</td>
+</tr>
+<tr>
+<td>Kubeadm config 模板统一为 v1beta4</td>
+<td>移除 v1beta3 支持</td>
+</tr>
+<tr>
+<td>控制面 kubeconfig 指向本地 apiserver</td>
+<td>修复升级时组件与 apiserver 版本偏差问题</td>
+</tr>
+<tr>
+<td>本地 kubeconfig 优先从 <code>/etc/kubernetes/admin.conf</code> 复制</td>
+<td>简化配置获取</td>
+</tr>
+<tr>
+<td>Dockerfile 基础镜像 Ubuntu 22.04 → 24.04</td>
+<td>仅影响 Kubespray 控制容器（运行 ansible-playbook 的容器），不影响节点 OS 支持</td>
+</tr>
+<tr>
+<td>kubeadm:cluster-admins 组</td>
+<td>admin kubeconfig 生成使用新组</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>节点 OS 支持示例:</strong> Kubespray v2.31.0 仍支持 Ubuntu 22.04 作为节点 OS。Dockerfile 升级到 24.04 只影响 Kubespray 自身的运行环境。</p>
+</blockquote>
+<hr>
+<h3 id="24-bug-修复">2.4 Bug 修复<a class="heading-anchor" aria-hidden tabindex="-1" href="#24-bug-修复">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>修复</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>NO_PROXY 变量损坏</strong></td>
+<td>代理环境关键修复</td>
+</tr>
+<tr>
+<td><strong>Cilium <code>cilium_enable_prometheus</code> 无效</strong></td>
+<td>无法开启 Prometheus 指标</td>
+</tr>
+<tr>
+<td><strong>drain task 超时 UNREACHABLE</strong></td>
+<td><code>drain_timeout</code> 超过 SSH 超时时失败，改用 async/poll</td>
+</tr>
+<tr>
+<td><strong>Calico KDD 缺失 RBAC</strong></td>
+<td>影响 LoadBalancer IP 分配和资源 GC</td>
+</tr>
+<tr>
+<td><strong>Calico 缺失 staged policy 权限</strong></td>
+<td>影响 API Server 访问</td>
+</tr>
+<tr>
+<td>kubeadm patches 自动清理</td>
+<td>不在变量中的 patch 文件会自动从节点删除</td>
+</tr>
+<tr>
+<td>kube_version 验证改进</td>
+<td>缺失 checksum 给出清晰错误</td>
+</tr>
+<tr>
+<td>包安装超时</td>
+<td>新增 5 分钟超时（<code>pkg_install_timeout</code> 可调）</td>
+</tr>
+<tr>
+<td>etcd 节点移除幂等性</td>
+<td>重复执行不再报错</td>
+</tr>
+<tr>
+<td>VolumeSnapshotClass 升级到 v1</td>
+<td></td>
+</tr>
+<tr>
+<td>openEuler metalink 加速</td>
+<td>自动选择最快镜像，修复中国境外慢速问题</td>
+</tr>
+<tr>
+<td>CiliumBGPAdvertisement 无 labels 崩溃</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="三上游组件变更">三、上游组件变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#三上游组件变更">#</a></h2>
+<h3 id="31-版本总览">3.1 版本总览<a class="heading-anchor" aria-hidden tabindex="-1" href="#31-版本总览">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>v2.30.0</th>
+<th>v2.31.0</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Kubernetes</strong></td>
+<td>1.34.3</td>
+<td><strong>1.35.4</strong></td>
+<td>小版本升级，含重要破坏性变更</td>
+</tr>
+<tr>
+<td><strong>etcd</strong></td>
+<td>3.5.26</td>
+<td><strong>3.6.10</strong></td>
+<td>⚠️ <strong>大版本升级</strong>，升级/回退需严格遵循官方流程</td>
+</tr>
+<tr>
+<td><strong>containerd</strong></td>
+<td>2.2.1</td>
+<td><strong>2.2.3</strong></td>
+<td>补丁升级</td>
+</tr>
+<tr>
+<td><strong>runc</strong></td>
+<td>1.3.4</td>
+<td><strong>1.4.2</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>CNI plugins</td>
+<td>1.8.0</td>
+<td><strong>1.9.1</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>Calico</td>
+<td>3.30.6</td>
+<td><strong>3.31.5</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>Cilium</td>
+<td>1.18.6</td>
+<td><strong>1.19.3</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>Flannel</td>
+<td>0.27.3</td>
+<td><strong>0.28.4</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>28.3</td>
+<td>28.3</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>cri-o</td>
+<td>1.34.4</td>
+<td><strong>1.35.0</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>metrics-server</td>
+<td>0.8.0</td>
+<td><strong>0.8.1</strong></td>
+<td>补丁升级</td>
+</tr>
+<tr>
+<td>Helm</td>
+<td>3.18.4</td>
+<td>3.18.4</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>kube-vip</td>
+<td>1.0.3</td>
+<td>1.0.3</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>kube-ovn</td>
+<td>1.12.21</td>
+<td>1.12.21</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>kube-router</td>
+<td>2.1.1</td>
+<td>2.1.1</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>multus</td>
+<td>4.2.2</td>
+<td>4.2.2</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>cert-manager</td>
+<td>1.15.3</td>
+<td>1.15.3</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>ArgoCD</td>
+<td>2.14.x*</td>
+<td>2.14.x*</td>
+<td>官方资料间存在版本信息不一致</td>
+</tr>
+<tr>
+<td>MetalLB</td>
+<td>0.13.9</td>
+<td>0.13.9</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>kata-containers</td>
+<td>3.7.0</td>
+<td>3.7.0</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>node-feature-discovery</td>
+<td>0.16.4</td>
+<td>0.16.4</td>
+<td>无变化</td>
+</tr>
+<tr>
+<td>Prometheus Operator CRD</td>
+<td>0.84.0</td>
+<td><strong>0.88.1</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>OpenStack CCM</td>
+<td>v1.32.0</td>
+<td><strong>v1.35.0</strong></td>
+<td>小版本升级</td>
+</tr>
+<tr>
+<td>Ansible</td>
+<td>10.7.0</td>
+<td><strong>11.13.0</strong></td>
+<td>大版本升级</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>containerd 说明:</strong> containerd 1.x→2.x 的跨越在更早 Kubespray 版本中已完成，v2.30.0 已使用 2.2.1。本轮 2.2.1→2.2.3 仅为补丁升级，无破坏性变更。</p>
+<p><em>ArgoCD 版本说明: Kubespray v2.31.0 GitHub Release 页面与源码默认值/README 之间存在 <code>2.14.21</code> 与 <code>2.14.5</code> 的不一致；本文不将其作为升级风险判断依据，实际部署请以所用源码包中的默认值为准。</em></p>
+</blockquote>
+<hr>
+<h3 id="32-kubernetes-1343--1354-重要变更">3.2 Kubernetes 1.34.3 → 1.35.4 重要变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#32-kubernetes-1343--1354-重要变更">#</a></h3>
+<h4 id="cgroup-v1-默认拒绝启动">cgroup v1 默认拒绝启动<a class="heading-anchor" aria-hidden tabindex="-1" href="#cgroup-v1-默认拒绝启动">#</a></h4>
+<p><strong>影响等级: ⚠️ 最高 — 升级后 kubelet 可能无法启动</strong></p>
+<p><strong>两阶段演进:</strong></p>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>K8s 版本</th>
+<th>KEP</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>维护模式</td>
+<td>v1.31</td>
+<td>KEP-4569</td>
+<td>引入 <code>FailCgroupV1</code> 字段，默认 false，仅打警告</td>
+</tr>
+<tr>
+<td>废弃</td>
+<td>v1.35 (Beta)</td>
+<td>KEP-5573</td>
+<td><code>FailCgroupV1</code> 默认改为 true，kubelet 拒绝启动</td>
+</tr>
+<tr>
+<td>移除 (计划)</td>
+<td>≥ v1.38</td>
+<td>—</td>
+<td>完全删除 cgroup v1 代码</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Kubespray 应对:</strong></p>
+<ul>
+<li>新增变量 <code>kubelet_fail_cgroup_v1: true</code>（默认）</li>
+<li>写入 kubelet-config 模板，仅对 K8s ≥1.35 生效</li>
+<li>涉及模板:
+<ul>
+<li><code>roles/kubernetes/control-plane/templates/kubeadm-config.v1beta4.yaml.j2</code></li>
+<li><code>roles/kubernetes/node/templates/kubelet-config.v1beta1.yaml.j2</code></li>
+</ul>
+</li>
+</ul>
+<p><strong>影响:</strong> 升级到 v1.35 后，cgroup v1 节点的 kubelet <strong>直接启动失败</strong>。</p>
+<p><strong>常见场景：Ubuntu 22.04 集群</strong></p>
+<ul>
+<li>Ubuntu 22.04 默认使用 cgroup v2，标准安装情况下不会因 <code>FailCgroupV1=true</code> 导致 kubelet 启动失败</li>
+<li>只需确认节点未被手动切回 cgroup v1，例如 GRUB 中存在 <code>systemd.unified_cgroup_hierarchy=0</code></li>
+</ul>
+<p><strong>验证方法:</strong></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 确认当前 cgroup 版本</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">stat</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -fc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> %T</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /sys/fs/cgroup</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># cgroup2fs = v2（正常，无需操作）</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tmpfs    = v1（需排查是否手动降级，需移除 GRUB 中的 =0 参数后重启）</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 检查 GRUB 是否被手动设置为 cgroup v1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -rE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "unified_cgroup_hierarchy"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/default/grub</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/default/grub.d/</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.cfg</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> 2></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/dev/null</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 无输出 = 默认 cgroup v2（正常）</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 有 =0  = 曾被手动降级（需移除）</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 确认 containerd cgroup driver</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">containerd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dump</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A5</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "plugins.*cgroup"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 或查看运行时配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ctr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --address</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /run/containerd/containerd.sock</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> info</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cgroup</span></span></code></pre>
+<p><strong>containerd cgroup driver 注意事项:</strong></p>
+<ul>
+<li>cgroup v2 下推荐使用 <strong>systemd</strong> driver</li>
+<li>Kubespray 默认已为 containerd 配置 systemd driver</li>
+<li>如发现 kubelet 与 containerd 的 driver 混用，建议统一为 systemd</li>
+</ul>
+<p><strong>如确实需要从 cgroup v1 迁移到 v2（仅限被手动降级的节点）:</strong></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 移除 GRUB 中的 cgroup v1 强制参数</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vi</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/default/grub</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除 GRUB_CMDLINE_LINUX 中的 systemd.unified_cgroup_hierarchy=0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 更新 GRUB 并重启</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update-grub</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> reboot</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 重启后验证</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">stat</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -fc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> %T</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /sys/fs/cgroup</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 期望: cgroup2fs</span></span></code></pre>
+<p><strong>工作负载兼容性（cgroup v2 环境下需注意）:</strong></p>
+<ul>
+<li>OpenJDK: 需 8u372+ / 11.0.16+ / 17+（旧版无法正确读取 cgroup v2 内存限制）</li>
+<li>Node.js: 需 20.3.0+</li>
+<li>Go 应用 (uber-go/automaxprocs): 需 v1.5.1+</li>
+<li>cAdvisor: 需 >= v0.43.0</li>
+<li>OOM 行为: cgroup v2 默认杀整个 cgroup（oom.group），可设 <code>singleProcessOOMKill: true</code> 回退到 v1 行为</li>
+</ul>
+<p><strong>操作系统 cgroup 默认版本对照:</strong></p>
+<table>
+<thead>
+<tr>
+<th>系统</th>
+<th>默认 cgroup</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ubuntu 22.04 (Jammy)</strong></td>
+<td><strong>v2</strong></td>
+<td>systemd 249，编译时 <code>-Ddefault-hierarchy=unified</code></td>
+</tr>
+<tr>
+<td><strong>Ubuntu 24.04 (Noble)</strong></td>
+<td><strong>v2</strong></td>
+<td>systemd 255</td>
+</tr>
+<tr>
+<td>RHEL 8</td>
+<td>v1</td>
+<td></td>
+</tr>
+<tr>
+<td>RHEL 9</td>
+<td>v2</td>
+<td>RHEL 10 不再支持 cgroup v1</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h4 id="其他破坏性变更">其他破坏性变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#其他破坏性变更">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>变更</th>
+<th>影响</th>
+<th>应对</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>移除 <code>--pod-infra-container-image</code> kubelet 标志</strong></td>
+<td>非kubeadm集群必须在升级前从 kubelet 配置移除此标志；kubeadm 用户如手动添加也需移除</td>
+<td>检查 kubelet 启动参数</td>
+</tr>
+<tr>
+<td><strong>IPVS kube-proxy 模式废弃</strong></td>
+<td>v1.35 起启动时打印警告，将在未来版本移除；如果当前 <code>kube_proxy_mode: ipvs</code>，则该项直接命中</td>
+<td>迁移到 nftables 后端（v1.33 已 GA）</td>
+</tr>
+<tr>
+<td><strong>StorageVersionMigration v1alpha1 API 移除</strong></td>
+<td>升级前必须删除 v1alpha1 资源，否则升级阻塞</td>
+<td><code>kubectl delete storageversionmigrations --all -A</code></td>
+</tr>
+<tr>
+<td><strong>gogo/protobuf 从 API 类型移除</strong></td>
+<td><code>ProtoMessage()</code> 方法被删除；自定义控制器若依赖将被破坏</td>
+<td>检查自定义控制器是否使用 gogo/protobuf</td>
+</tr>
+<tr>
+<td><strong>Pod resize 限制为仅 CPU/内存</strong></td>
+<td>对其他资源类型的 in-place resize 请求将被拒绝</td>
+<td>如有非 CPU/内存的 resize 需求需调整</td>
+</tr>
+<tr>
+<td><strong>Feature gate 依赖显式化</strong></td>
+<td><code>AllAlpha=true</code> 可能因缺少依赖的 beta gate 而失效</td>
+<td>检查是否使用 AllAlpha</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>关于 containerd 1.x 支持的说明:</strong> Kubernetes v1.35 官方 release blog 已明确给出对 containerd 1.x 的最后提醒。
+对已使用 containerd 2.x 的集群，此条目无直接影响，
+但后续不应继续引入 containerd 1.x 节点。</p>
+</blockquote>
+<hr>
+<h4 id="v135-新-ga-特性本版本正式稳定">v1.35 新 GA 特性（本版本正式稳定）<a class="heading-anchor" aria-hidden tabindex="-1" href="#v135-新-ga-特性本版本正式稳定">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>KEP</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>In-Place Pod Resize</strong></td>
+<td>KEP-1287</td>
+<td>不重启 Pod 调整 CPU/内存</td>
+</tr>
+<tr>
+<td><strong>Kubelet 配置 drop-in 目录</strong></td>
+<td>—</td>
+<td><code>/etc/kubernetes/kubelet/config.d/</code> 风格配置片段</td>
+</tr>
+<tr>
+<td><strong>Pod .metadata.generation 追踪</strong></td>
+<td>KEP-5067</td>
+<td>PodObservedGenerationTracking，可靠追踪 Pod 更新状态</td>
+</tr>
+<tr>
+<td><strong>Job API managed-by</strong></td>
+<td>KEP-4368</td>
+<td>Job 可被外部控制器声明管理权</td>
+</tr>
+<tr>
+<td><strong>Fine-grained Supplemental Groups</strong></td>
+<td>KEP-3619</td>
+<td>精细化补充组控制，限制 Pod 可使用的组 ID</td>
+</tr>
+<tr>
+<td><strong>NUMA 节点数限制可配置</strong></td>
+<td>KEP-4622</td>
+<td>Topology Manager 可配置最大允许 NUMA 节点数</td>
+</tr>
+<tr>
+<td><strong>PreferSameNode / PreferSameZone</strong></td>
+<td>KEP-3015</td>
+<td><code>trafficDistribution</code> 扩展，新增 PreferSameNode（v1.33 仅 PreferClose→PreferSameZone）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="此前版本已-ga-的重要特性升级后可用">此前版本已 GA 的重要特性（升级后可用）<a class="heading-anchor" aria-hidden tabindex="-1" href="#此前版本已-ga-的重要特性升级后可用">#</a></h4>
+<blockquote>
+<p>以下特性在 v1.33/v1.34 已 GA，v1.35 仅移除了 feature gate。若从 v1.34 或更早升级，这些能力可能对你是“新可用”的。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>KEP</th>
+<th>GA 版本</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Sidecar Containers</strong></td>
+<td>KEP-753</td>
+<td>v1.33</td>
+<td><code>restartPolicy: Always</code> 的 init 容器</td>
+</tr>
+<tr>
+<td><strong>nftables kube-proxy 后端</strong></td>
+<td>KEP-3866</td>
+<td>v1.33</td>
+<td>替代 iptables/ipvs 的新推荐后端</td>
+</tr>
+<tr>
+<td><strong>Multiple Service CIDRs</strong></td>
+<td>KEP-1880</td>
+<td>v1.33</td>
+<td><code>ServiceCIDR</code> / <code>IPAddress</code> API 稳定</td>
+</tr>
+<tr>
+<td><strong>Pod 拓扑感知路由 (PreferSameZone)</strong></td>
+<td>KEP-2433</td>
+<td>v1.33</td>
+<td><code>trafficDistribution</code> 字段，v1.34 废弃 PreferClose 更名 PreferSameZone</td>
+</tr>
+<tr>
+<td><strong>Linux Swap 支持</strong></td>
+<td>KEP-2400</td>
+<td>v1.34</td>
+<td><code>LimitedSwap</code> 模式正式可用</td>
+</tr>
+<tr>
+<td><strong>DRA 结构化参数</strong></td>
+<td>KEP-4381</td>
+<td>v1.34</td>
+<td><code>resource.k8s.io/v1</code> API 稳定</td>
+</tr>
+<tr>
+<td><strong>AppArmor 支持</strong></td>
+<td>—</td>
+<td>v1.34</td>
+<td>正式稳定</td>
+</tr>
+<tr>
+<td><strong>VolumeAttributesClass</strong></td>
+<td>KEP-3751</td>
+<td>v1.34</td>
+<td>在线卷 IO 级别调整</td>
+</tr>
+<tr>
+<td><strong>Sleep 生命周期钩子</strong></td>
+<td>KEP-3960</td>
+<td>v1.34</td>
+<td>容器生命周期支持 <code>sleep</code> 动作</td>
+</tr>
+<tr>
+<td><strong>自动 cgroup driver 检测</strong></td>
+<td>KEP-4033</td>
+<td>v1.34</td>
+<td>从 CRI 自动检测 cgroup driver，废弃手动配置</td>
+</tr>
+<tr>
+<td><strong>SPDY → WebSockets 过渡</strong></td>
+<td>—</td>
+<td>v1.34</td>
+<td>exec/attach/port-forward 传输协议升级</td>
+</tr>
+<tr>
+<td><strong>Kubelet 镜像按年龄 GC</strong></td>
+<td>—</td>
+<td>v1.34</td>
+<td>基于最大年龄的镜像垃圾回收</td>
+</tr>
+<tr>
+<td><strong>Kubelet 限制并行镜像拉取</strong></td>
+<td>—</td>
+<td>v1.34</td>
+<td>控制并发镜像拉取数量</td>
+</tr>
+</tbody>
+</table>
+<h4 id="重要-beta-特性默认启用">重要 Beta 特性（默认启用）<a class="heading-anchor" aria-hidden tabindex="-1" href="#重要-beta-特性默认启用">#</a></h4>
+<blockquote>
+<p>以下特性在 v1.35 进入 Beta，默认启用但仍可通过 feature gate 关闭，除非特别标注。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>KEP</th>
+<th>Beta 版本</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pod 证书 / 原生 mTLS</strong></td>
+<td>KEP-4317</td>
+<td>v1.35</td>
+<td>kubelet 管理的工作负载证书，原生 mTLS</td>
+</tr>
+<tr>
+<td><strong>maxUnavailable for StatefulSets</strong></td>
+<td>KEP-961</td>
+<td>v1.35</td>
+<td>StatefulSet 支持并行滚动更新</td>
+</tr>
+<tr>
+<td><strong>可配置 HPA 容差</strong></td>
+<td>KEP-4951</td>
+<td>v1.35</td>
+<td>按资源设置 HPA 容差，替代全局 10%</td>
+</tr>
+<tr>
+<td><strong>容器重启规则</strong></td>
+<td>KEP-5307</td>
+<td>v1.35</td>
+<td>每容器 restartPolicy</td>
+</tr>
+<tr>
+<td><strong>User Namespaces</strong></td>
+<td>KEP-127</td>
+<td>v1.35</td>
+<td>Pod 内 ID 映射，增强容器隔离</td>
+</tr>
+<tr>
+<td><strong>Pod 级资源请求/限制</strong></td>
+<td>KEP-2837</td>
+<td>v1.34</td>
+<td>Pod 级别设置资源</td>
+</tr>
+<tr>
+<td><strong>OCI 镜像卷</strong></td>
+<td>KEP-4639</td>
+<td>v1.34</td>
+<td>拉取 OCI 制品作为卷（需 containerd 2.1+）</td>
+</tr>
+<tr>
+<td><strong>Mutating Admission Policies</strong></td>
+<td>KEP-3962</td>
+<td>v1.34</td>
+<td>基于 CEL 的进程内 Mutation</td>
+</tr>
+</tbody>
+</table>
+<h4 id="废弃项">废弃项<a class="heading-anchor" aria-hidden tabindex="-1" href="#废弃项">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>状态</th>
+<th>替代</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IPVS kube-proxy 模式</td>
+<td>v1.35 废弃（打印警告）</td>
+<td>nftables</td>
+</tr>
+<tr>
+<td><code>PreferClose</code> traffic distribution</td>
+<td>v1.34 废弃</td>
+<td><code>PreferSameZone</code></td>
+</tr>
+<tr>
+<td>手动 cgroup driver 配置</td>
+<td>v1.34 废弃</td>
+<td>自动检测（KEP-4033）</td>
+</tr>
+<tr>
+<td>stable <code>Endpoints</code> API</td>
+<td>v1.33 废弃</td>
+<td>EndpointSlices</td>
+</tr>
+<tr>
+<td>In-tree gitRepo 卷驱动</td>
+<td>v1.33 移除（安全风险，RCE）</td>
+<td>Init container + git sync</td>
+</tr>
+<tr>
+<td><code>status.nodeInfo.kubeProxyVersion</code></td>
+<td>v1.33 移除</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="33-etcd-3526--3610-重要变更">3.3 etcd 3.5.26 → 3.6.10 重要变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#33-etcd-3526--3610-重要变更">#</a></h3>
+<p><strong>这是本轮升级中风险最高的组件变更之一。</strong></p>
+<h4 id="破坏性变更">破坏性变更<a class="heading-anchor" aria-hidden tabindex="-1" href="#破坏性变更">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>变更</th>
+<th>影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>存储格式变更</strong></td>
+<td>bbolt v2 后端改进；回退需遵循官方 downgrade 流程或从升级前 snapshot 恢复</td>
+</tr>
+<tr>
+<td><strong>gRPC proxy 重构</strong></td>
+<td>部分标志名变更</td>
+</tr>
+<tr>
+<td><strong>已废弃的 v2 API 完全移除</strong></td>
+<td>依赖旧 v2 API 的工具将失败</td>
+</tr>
+<tr>
+<td><strong>认证模型调整</strong></td>
+<td>RBAC 部分边界情况行为变化</td>
+</tr>
+<tr>
+<td><strong><code>etcdctl</code> 部分废弃标志移除</strong></td>
+<td>旧版 snapshot status 标志等</td>
+</tr>
+</tbody>
+</table>
+<h4 id="升级路径强制">升级路径（强制）<a class="heading-anchor" aria-hidden tabindex="-1" href="#升级路径强制">#</a></h4>
+<pre><code>etcd 3.5.x (&#x3C; 3.5.26)  →  etcd 3.5.26+  →  etcd 3.6.10
+         ⚠️ 必须先升到 3.5.26+      ⚠️ 回退需按官方流程执行
+</code></pre>
+<p><strong>为什么必须先升到 3.5.26+？</strong></p>
+<p>官方升级文档明确要求：所有 3.5 member 必须先升级到 <code>3.5.26+</code>，因为 <code>3.5.24</code> 到 <code>3.5.26</code> 修复了多个可能阻塞 3.6 升级的问题。</p>
+<ol>
+<li>升级方式是<strong>滚动升级</strong>，逐个 member 从 3.5.26 升到 3.6，过渡期允许 3.5.26 与 3.6 共存</li>
+<li>不应依赖“直接替换二进制”回滚；如需回退，需按官方 downgrade 流程执行，或从升级前备份恢复</li>
+</ol>
+<p><strong>Kubespray 实操:</strong> 先升级到 2.30.0（etcd 3.5.26），确认集群健康后再升级到 2.31.0。</p>
+<h4 id="新特性与改进">新特性与改进<a class="heading-anchor" aria-hidden tabindex="-1" href="#新特性与改进">#</a></h4>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>结构化日志</strong></td>
+<td>从 capnslog 迁移到 slog，支持 JSON 输出</td>
+</tr>
+<tr>
+<td><strong>在线碎片整理改进</strong></td>
+<td>降低对在线集群的影响</td>
+</tr>
+<tr>
+<td><strong>Watch 性能优化</strong></td>
+<td>减少大集群 watch 路径的内存分配</td>
+</tr>
+<tr>
+<td><strong>MVCC 读锁争用降低</strong></td>
+<td>BoltDB 后端 range 查询更快</td>
+</tr>
+</tbody>
+</table>
+<h4 id="升级前检查">升级前检查<a class="heading-anchor" aria-hidden tabindex="-1" href="#升级前检查">#</a></h4>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 确认当前 etcd 版本</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> version</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 确认集群健康</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> endpoint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> health</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cluster</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 备份！</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> snapshot</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> save</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /backup/pre-3.6-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">date</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> +%Y%m%d</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.db</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 4. 性能基线检查（非 v3.6 新功能，但建议升级前运行）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> check</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> perf</span></span></code></pre>
+<hr>
+<h3 id="34-containerd-221--223--runc-134--142">3.4 containerd 2.2.1 → 2.2.3 &#x26; runc 1.3.4 → 1.4.2<a class="heading-anchor" aria-hidden tabindex="-1" href="#34-containerd-221--223--runc-134--142">#</a></h3>
+<p><strong>containerd 2.2.1 → 2.2.3:</strong> 补丁级升级，无破坏性变更。</p>
+<blockquote>
+<p>containerd 1.x→2.x 的跨版本变更已在更早 Kubespray 版本完成；本轮 2.2.1→2.2.3 不涉及新的配置格式变化。</p>
+</blockquote>
+<p><strong>runc 1.3.4 → 1.4.2:</strong> 小版本升级，向后兼容，风险低。</p>
+<p>runc 1.4.x 主要是功能补充和回归修复，重点包括 cgroup v2 支持改进、安全加固，以及若干容器生命周期相关修复。建议先在非生产环境验证 cgroup v2 下容器创建/销毁行为。</p>
+<hr>
+<h2 id="四通用升级检查清单">四、通用升级检查清单<a class="heading-anchor" aria-hidden tabindex="-1" href="#四通用升级检查清单">#</a></h2>
+<p>适用于使用 Kubespray 从 v2.30 升级到 v2.31 的集群；以下项目按命中条件执行。</p>
+<h3 id="41-升级前必做">4.1 升级前必做<a class="heading-anchor" aria-hidden tabindex="-1" href="#41-升级前必做">#</a></h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" disabled> <strong>cgroup 版本确认</strong> — 见三.2
+<ul>
+<li><code>stat -fc %T /sys/fs/cgroup</code> → 期望 <code>cgroup2fs</code></li>
+<li>如输出 <code>tmpfs</code>: 检查 GRUB 是否有 <code>systemd.unified_cgroup_hierarchy=0</code>，移除后 <code>update-grub</code> → 重启</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>containerd cgroup driver 确认（如运行时为 containerd）</strong> — 见三.2
+<ul>
+<li>Kubespray 部署默认 systemd driver，检查是否有手动改过</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>etcd 分步升级（如使用 Kubespray 管理的 etcd）</strong> — 见三.3
+<ul>
+<li>先升到 2.30.0 (etcd 3.5.26)，再升 2.31.0 (etcd 3.6.10)</li>
+<li>升级前<strong>必须备份</strong>: <code>etcdctl snapshot save</code></li>
+<li>确认集群健康: <code>etcdctl endpoint health --cluster</code></li>
+<li>如需回退，需按官方 downgrade 流程执行，或从升级前 snapshot 恢复</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>移除 <code>--pod-infra-container-image</code> kubelet 标志（如非 kubeadm 集群，或曾手动追加该参数）</strong> — 见三.2
+<ul>
+<li>检查所有节点 kubelet 启动参数，删除此标志</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>评估 IPVS kube-proxy 迁移（如当前 <code>kube_proxy_mode: ipvs</code>）</strong> — 见三.2
+<ul>
+<li>本次升级后至少会出现废弃告警，建议评估迁移到 <code>nftables</code></li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>检查 StorageVersionMigration v1alpha1 资源</strong> — 见三.2
+<ul>
+<li><code>kubectl get storageversionmigrations --all-namespaces</code></li>
+<li>如存在: <code>kubectl delete storageversionmigrations --all -A</code></li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>ingress-nginx 迁移（如当前仍在使用该 addon）</strong> — 见二.1.1
+<ul>
+<li>如当前在用，需提前规划迁移（Istio / Gateway API / 第三方控制器）</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>Dashboard 替换（如当前仍依赖 Dashboard）</strong> — 见二.1.2
+<ul>
+<li>如需 Web UI，部署 Headlamp；移除 <code>dashboard_enabled</code> 变量</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>清理废弃变量</strong> — 见二.1.3
+<ul>
+<li>检查 inventory 中是否定义了 <code>kubelet_static_pod_path</code>，如有则删除</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>bastion 变量重命名（如曾覆盖旧变量名）</strong> — 见二.1.4
+<ul>
+<li>如 inventory 中覆盖过 <code>ssh_bastion_confing__name</code>，改为 <code>ssh_bastion_config_name</code></li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>自定义控制器 gogo/protobuf 依赖检查（如集群中存在自研或第三方控制器）</strong> — 见三.2
+<ul>
+<li>检查自研/第三方控制器是否依赖 <code>ProtoMessage()</code> 方法</li>
+</ul>
+</li>
+</ul>
+<h3 id="42-升级后验证">4.2 升级后验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#42-升级后验证">#</a></h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" disabled> <strong>工作负载 cgroup v2 兼容性（如节点使用或将迁移到 cgroup v2）</strong> — 见三.2
+<ul>
+<li>OpenJDK: 8u372+ / 11.0.16+ / 17+</li>
+<li>Node.js: 20.3.0+</li>
+<li>Go 应用 (uber-go/automaxprocs): v1.5.1+</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>第三方 Agent cgroup v2 兼容</strong>: cAdvisor >= v0.43.0</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>OOM 行为</strong>: cgroup v2 默认杀整个 cgroup，如需单进程 OOM kill 需配 <code>singleProcessOOMKill: true</code></li>
+</ul>
+<h3 id="43-长期规划">4.3 长期规划<a class="heading-anchor" aria-hidden tabindex="-1" href="#43-长期规划">#</a></h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" disabled> <strong>cgroup v1 完全移除准备</strong>: K8s v1.38 计划删除 cgroup v1 代码
+<ul>
+<li>届时 <code>kubelet_fail_cgroup_v1: false</code> 将不再有效</li>
+</ul>
+</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>IPVS kube-proxy 迁移（如当前使用 IPVS）</strong>: v1.35 已废弃，逐步迁移到 nftables</li>
+<li class="task-list-item"><input type="checkbox" disabled> <strong>Gateway API 迁移</strong>: Ingress → Gateway API 是 Kubernetes 网络发展方向</li>
+</ul>
+<hr>
+<h2 id="五参考链接">五、参考链接<a class="heading-anchor" aria-hidden tabindex="-1" href="#五参考链接">#</a></h2>
+<ul>
+<li>Kubespray v2.31.0 Release: <a href="https://github.com/kubernetes-sigs/kubespray/releases/tag/v2.31.0">https://github.com/kubernetes-sigs/kubespray/releases/tag/v2.31.0</a></li>
+<li>K8s v1.35 Release: <a href="https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/">https://kubernetes.io/blog/2025/12/17/kubernetes-v1-35-release/</a></li>
+<li>K8s v1.34 Release: <a href="https://kubernetes.io/blog/2025/08/27/kubernetes-v1-34-release/">https://kubernetes.io/blog/2025/08/27/kubernetes-v1-34-release/</a></li>
+<li>K8s v1.33 Release: <a href="https://kubernetes.io/blog/2025/04/23/kubernetes-v1-33-release/">https://kubernetes.io/blog/2025/04/23/kubernetes-v1-33-release/</a></li>
+<li>KEP-5573 (Remove cgroup v1): <a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/5573-remove-cgroup-v1-support">https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/5573-remove-cgroup-v1-support</a></li>
+<li>KEP-4569 (cgroup v1 maintenance mode): <a href="https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/4569-cgroup-v1-maintenance-mode">https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/4569-cgroup-v1-maintenance-mode</a></li>
+<li>etcd v3.6 Release: <a href="https://github.com/etcd-io/etcd/releases/tag/v3.6.0">https://github.com/etcd-io/etcd/releases/tag/v3.6.0</a></li>
+<li>etcd Upgrade Guide: <a href="https://etcd.io/docs/v3.6/upgrades/upgrade_3_6/">https://etcd.io/docs/v3.6/upgrades/upgrade_3_6/</a></li>
+<li>etcd Downgrade Guide: <a href="https://etcd.io/docs/v3.6/downgrades/downgrade_3_6/">https://etcd.io/docs/v3.6/downgrades/downgrade_3_6/</a></li>
+<li>ingress-nginx 退役公告: <a href="https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/">https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/</a></li>
+<li>ingress-nginx 移除 PR #12767: <a href="https://github.com/kubernetes-sigs/kubespray/pull/12767">https://github.com/kubernetes-sigs/kubespray/pull/12767</a></li>
+<li>Headlamp: <a href="https://github.com/kubernetes-sigs/headlamp">https://github.com/kubernetes-sigs/headlamp</a></li>
+<li>Gateway API: <a href="https://github.com/kubernetes-sigs/gateway-api">https://github.com/kubernetes-sigs/gateway-api</a></li>
+<li>Istio Kubernetes Ingress: <a href="https://istio.io/latest/docs/tasks/traffic-management/ingress/kubernetes-ingress/">https://istio.io/latest/docs/tasks/traffic-management/ingress/kubernetes-ingress/</a></li>
+<li>Istio DestinationRule Reference: <a href="https://istio.io/latest/docs/reference/config/networking/destination-rule/">https://istio.io/latest/docs/reference/config/networking/destination-rule/</a></li>
+<li>RHEL 9 cgroup v2 reference: <a href="https://access.redhat.com/solutions/6955882">https://access.redhat.com/solutions/6955882</a></li>
+<li>废弃变量检测 PR #12942: <a href="https://github.com/kubernetes-sigs/kubespray/pull/12942">https://github.com/kubernetes-sigs/kubespray/pull/12942</a></li>
+<li>废弃变量检测 Issue #11039: <a href="https://github.com/kubernetes-sigs/kubespray/issues/11039">https://github.com/kubernetes-sigs/kubespray/issues/11039</a></li>
+<li>bastion 变量重命名 PR #13046: <a href="https://github.com/kubernetes-sigs/kubespray/pull/13046">https://github.com/kubernetes-sigs/kubespray/pull/13046</a></li>
+<li>bastion 变量重命名 Issue #13032: <a href="https://github.com/kubernetes-sigs/kubespray/issues/13032">https://github.com/kubernetes-sigs/kubespray/issues/13032</a></li>
+</ul>

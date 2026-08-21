@@ -1,0 +1,119 @@
+<h1 id="安装-haproxy-和-keepalived-用于-apiserver-负载均衡">安装 haproxy 和 keepalived 用于 apiserver 负载均衡<a class="heading-anchor" aria-hidden tabindex="-1" href="#安装-haproxy-和-keepalived-用于-apiserver-负载均衡">#</a></h1>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 haproxy 和 keepalived</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^server</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apt</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> haproxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> keepalived</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 准备 haproxy 配置文件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> haproxy.cfg</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">frontend k3s-frontend</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    bind *:7443</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    mode tcp</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    option tcplog</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    default_backend k3s-backend</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">backend k3s-backend</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    mode tcp</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    option tcp-check</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    balance roundrobin</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    default-server inter 10s downinter 5s</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    server bj1mn01 172.18.15.101:6443 check</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    server bj1mn02 172.18.15.102:6443 check</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    server bj1mn03 172.18.15.103:6443 check</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^server</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> haproxy.cfg</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/haproxy/haproxy.cfg</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^server</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> haproxy</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 准备 keepalived 配置文件</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * virtual_router_id 请**随机从 0-255 之间选择一个值**，如果相同网络环境有其它用户也启动 keepalived, 需要避免此值相同, 否则会导致冲突</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 172.18.15.199 为 vip (**子网掩码值必须和物理网络一致**, 否则可能无法访问)，可以使用局域网中空闲的 IP，如果使用数据中心则需要联系管理员获取</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn01-keepalived.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_script chk_haproxy {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    script 'killall -0 haproxy' # faster than pidof</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interval 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_instance haproxy-vip {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interface eth0 # change it</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    state MASTER</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    priority 100</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_router_id 52</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_ipaddress {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.199/24</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_src_ip 172.18.15.101</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_peer {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.102</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.103</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    track_script {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        chk_haproxy</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn01-keepalived.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/keepalived/keepalived.conf</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn02-keepalived.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_script chk_haproxy {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    script 'killall -0 haproxy' # faster than pidof</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interval 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_instance haproxy-vip {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interface eth0 # change it</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    state BACKUP</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    priority 90</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_router_id 52</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_ipaddress {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.199/24</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_src_ip 172.18.15.102</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_peer {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.101</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.103</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    track_script {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        chk_haproxy</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn02</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn02-keepalived.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/keepalived/keepalived.conf</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn03-keepalived.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_script chk_haproxy {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    script 'killall -0 haproxy' # faster than pidof</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interval 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vrrp_instance haproxy-vip {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    interface eth0 # change it</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    state BACKUP</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    priority 80</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_router_id 52</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    virtual_ipaddress {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.199/24</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_src_ip 172.18.15.103</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    unicast_peer {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.101</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      172.18.15.102</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    track_script {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        chk_haproxy</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn03</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1mn03-keepalived.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/keepalived/keepalived.conf</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重启 keepalived</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^server</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> keepalived</span></span></code></pre>

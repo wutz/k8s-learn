@@ -1,0 +1,46 @@
+<h1 id="nvbandwidth">NVBandwidth<a class="heading-anchor" aria-hidden tabindex="-1" href="#nvbandwidth">#</a></h1>
+<p><strong>用途</strong>：测量 GPU 系统的内存带宽和延迟（PCIe / NVLink / Host-Device 通信），每节点独立运行。</p>
+<h2 id="快速开始默认-volcano">快速开始（默认 volcano）<a class="heading-anchor" aria-hidden tabindex="-1" href="#快速开始默认-volcano">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> volcano/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看每个节点的测试结果</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --no-headers</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> custom-columns=POD:.metadata.name,NODE:.spec.nodeName</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvbandwidth</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> while</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> read</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NODE</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">  echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "########## Node: ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">NODE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">} (Pod: ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}) ##########"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">POD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}"</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">  echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "=================================================================="</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span></code></pre>
+<p>修改 <code>mlPolicy.numNodes</code> 调整测试节点数（默认 2）。</p>
+<h2 id="调度器选择">调度器选择<a class="heading-anchor" aria-hidden tabindex="-1" href="#调度器选择">#</a></h2>
+<p>默认推荐 Kueue，其他调度器按需选用：</p>
+<table>
+<thead>
+<tr>
+<th>调度器</th>
+<th>推荐场景</th>
+<th>目录</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Volcano （默认）</strong></td>
+<td>多租户优先级抢占</td>
+<td><a href="/lessons/ai/trainer/examples/nvbandwidth/volcano"><code>volcano/</code></a></td>
+</tr>
+<tr>
+<td>Kueue</td>
+<td>多租户配额控制</td>
+<td><a href="/lessons/ai/trainer/examples/nvbandwidth/kueue"><code>kueue/</code></a></td>
+</tr>
+<tr>
+<td>scheduler-plugins</td>
+<td>基础验证、快速测试</td>
+<td><a href="/lessons/ai/trainer/examples/nvbandwidth/scheduler-plugins"><code>scheduler-plugins/</code></a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://github.com/NVIDIA/nvbandwidth">NVBandwidth 项目</a></li>
+</ul>

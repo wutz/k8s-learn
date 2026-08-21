@@ -1,0 +1,113 @@
+<h1 id="kubespray-v2280-control-plane-节点扩容方案">kubespray-v2.28.0 Control Plane 节点扩容方案<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubespray-v2280-control-plane-节点扩容方案">#</a></h1>
+<h2 id="背景">背景<a class="heading-anchor" aria-hidden tabindex="-1" href="#背景">#</a></h2>
+<ul>
+<li>现有 1 个 Control Plane 节点：mn-192-168-3-21</li>
+<li>Kubespray 版本：2.28.0</li>
+</ul>
+<h2 id="目标">目标<a class="heading-anchor" aria-hidden tabindex="-1" href="#目标">#</a></h2>
+<ul>
+<li>新增 2 个 Control Plane 节点：mn-192-168-3-22、mn-192-168-3-23</li>
+</ul>
+<blockquote>
+<p>⚠️ 实现高可用（HA）控制平面，确保 etcd 集群扩展以支持奇数个成员（从 1 个扩展到 3 个）。</p>
+</blockquote>
+<h2 id="前置条件">前置条件<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置条件">#</a></h2>
+<ul>
+<li>新节点（mn-192-168-3-22 和 mn-192-168-3-23）已准备好：
+<ul>
+<li>安装兼容的操作系统（例如 Ubuntu 或 CentOS），并配置网络、SSH 无密码访问（从 Ansible 控制机）</li>
+<li>确保 Ansible 可以连接到新节点（测试 <code>ansible -i inventory/mycluster/inventory.ini all -m ping</code>）</li>
+<li>节点硬件满足 Kubernetes Control Plane 要求（至少 2 GB 内存、2 CPU 核心）</li>
+</ul>
+</li>
+<li>备份现有集群状态，包括 etcd 数据（使用 <code>etcdctl snapshot save</code>）</li>
+<li>参考 Kubespray 官方文档：<a href="https://github.com/kubernetes-sigs/kubespray/blob/v2.28.0/docs/operations/recover-control-plane.md">Recovering the control plane</a></li>
+</ul>
+<blockquote>
+<p>注意：Kubespray 使用 recover-control-plane.yml playbook 来处理 Control Plane 扩展，因为直接使用 scale.yml 可能导致 etcd 配置问题。将新节点模拟为"broken"节点来添加它们，从而安全更新 etcd 成员。</p>
+</blockquote>
+<h2 id="扩容步骤">扩容步骤<a class="heading-anchor" aria-hidden tabindex="-1" href="#扩容步骤">#</a></h2>
+<h3 id="1-配置-inventory-文件">1. 配置 Inventory 文件<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-配置-inventory-文件">#</a></h3>
+<p>更新 inventory/mycluster/inventory.ini 文件，将新节点添加到 [kube_control_plane] 和 [etcd] 组中。同时，定义 [broken_etcd] 和 [broken_kube_control_plane] 组，将新节点视为"broken"以触发恢复逻辑。</p>
+<p>示例配置：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">[kube_control_plane]</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-21 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.21 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">etcd_member_name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">etcd1</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-22 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.22 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">etcd_member_name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">etcd2</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-23 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.23 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">etcd_member_name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">etcd3</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">[etcd:children]</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">kube_control_plane</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">[broken_etcd]</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-22 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.22 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">etcd_member_name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">etcd2</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-23 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.23 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">etcd_member_name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">etcd3</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">[broken_kube_control_plane]</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-22 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.22</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#98C379">mn-192-168-3-23 </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">ansible_host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">=</span><span style="--shiki-light:#24292E;--shiki-dark:#98C379">192.168.3.23</span></span></code></pre>
+<blockquote>
+<p>解释：etcd_member_name 必须唯一，用于 etcd 集群成员标识。[broken_*] 组用于 playbook 模拟恢复场景，从而添加新 etcd 成员而不破坏现有集群。</p>
+</blockquote>
+<h3 id="2-修改-etcd-配置如果必要">2. 修改 etcd 配置（如果必要）<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-修改-etcd-配置如果必要">#</a></h3>
+<p>在 Kubespray 2.28.0 中存在 etcd 配置 bug，导致 etcd.env 和 etcd-events.env 中的 ETCD_INITIAL_CLUSTER 配置包含多余引号，可能导致 etcd 启动失败。</p>
+<ul>
+<li>参考修复：<a href="https://github.com/kubernetes-sigs/kubespray/pull/12350/commits/7d051ff3261f0b28a163c97d6327947ee1b023ee">Kubespray PR #12350 Commit</a></li>
+</ul>
+<h3 id="3-更新-ansible-facts">3. 更新 Ansible Facts<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-更新-ansible-facts">#</a></h3>
+<p>运行以下命令刷新节点 facts：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --become</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --become-user=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> playbooks/facts.yml</span></span></code></pre>
+<blockquote>
+<p>解释：这确保 Ansible 收集新节点的最新信息，用于后续 playbook。</p>
+</blockquote>
+<h3 id="4-执行扩容">4. 执行扩容<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-执行扩容">#</a></h3>
+<p>使用 recover-control-plane.yml playbook 添加新节点：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --become</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --become-user=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> recover-control-plane.yml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --limit=etcd,kube_control_plane</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -e</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> etcd_retries=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">10</span></span></code></pre>
+<blockquote>
+<p>解释：</p>
+<ul>
+<li><code>--limit=etcd,kube_control_plane</code>：限制 playbook 只影响 etcd 和 Control Plane 节点</li>
+<li><code>-v</code>：启用详细输出，便于调试</li>
+<li><code>-e etcd_retries=10</code>：增加 etcd 操作重试次数，以处理潜在的网络或同步问题</li>
+</ul>
+</blockquote>
+<blockquote>
+<p>注意：如果 playbook 失败，检查日志并确保新节点可达。可能需要设置 <code>-e ignore_assert_errors=yes</code> 来忽略某些断言错误。</p>
+</blockquote>
+<h3 id="5-清理-inventory">5. 清理 Inventory<a class="heading-anchor" aria-hidden tabindex="-1" href="#5-清理-inventory">#</a></h3>
+<p>扩容成功后，从 inventory.ini 中移除 [broken_etcd] 和 [broken_kube_control_plane] 组，以避免未来 playbook 误操作。</p>
+<h2 id="检查验证">检查验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#检查验证">#</a></h2>
+<h3 id="检查节点状态">检查节点状态<a class="heading-anchor" aria-hidden tabindex="-1" href="#检查节点状态">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span></code></pre>
+<p>预期输出：</p>
+<pre><code>NAME              STATUS   ROLES           AGE    VERSION
+mn-192-168-3-21   Ready    control-plane   18m    v1.32.5
+mn-192-168-3-22   Ready    control-plane   4m5s   v1.32.5
+mn-192-168-3-23   Ready    control-plane   4m3s   v1.32.5
+</code></pre>
+<h3 id="检查-etcd-集群健康">检查 etcd 集群健康<a class="heading-anchor" aria-hidden tabindex="-1" href="#检查-etcd-集群健康">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --endpoints=https://127.0.0.1:2379</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cacert=/etc/ssl/etcd/ssl/ca.pem</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cert=/etc/ssl/etcd/ssl/node-$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">hostname</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">).pem</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --key=/etc/ssl/etcd/ssl/node-$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">hostname</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">)-key.pem</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> member</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span></code></pre>
+<p>预期输出：</p>
+<pre><code>9f387ea04d3b1f4e, started, etcd2, https://192.168.3.22:2380, https://192.168.3.22:2379, false
+c2ad425db0cdd901, started, etcd3, https://192.168.3.23:2380, https://192.168.3.23:2379, false
+c50216e882985073, started, etcd1, https://192.168.3.21:2380, https://192.168.3.21:2379, false
+</code></pre>
+<blockquote>
+<p>解释：每个成员包括 ID、状态、名称、对等 URL 和客户端 URL。最后的 "false" 表示非 learner 模式。确保所有成员在线，无 unstarted 或 unhealthy 节点。</p>
+</blockquote>
+<h3 id="检查-control-plane-组件">检查 Control Plane 组件<a class="heading-anchor" aria-hidden tabindex="-1" href="#检查-control-plane-组件">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span></span></code></pre>
+<p>确保 kube-apiserver、kube-controller-manager、kube-scheduler 等 Pod 在新节点上运行。</p>
+<h3 id="监控日志">监控日志<a class="heading-anchor" aria-hidden tabindex="-1" href="#监控日志">#</a></h3>
+<p>使用 <code>journalctl -u kubelet</code> 或 <code>kubectl logs</code> 检查任何错误。</p>
+<h2 id="潜在问题与排查">潜在问题与排查<a class="heading-anchor" aria-hidden tabindex="-1" href="#潜在问题与排查">#</a></h2>
+<ul>
+<li><strong>etcd 同步失败</strong>：增加 etcd_retries 或检查网络连通性（端口 2379、2380）</li>
+<li><strong>证书问题</strong>：确保新节点的证书正确生成（playbook 会处理，但可手动验证 /etc/kubernetes/ssl）</li>
+<li><strong>版本不匹配</strong>：确认所有节点 Kubernetes 版本一致（v1.32.5）</li>
+<li>如果 playbook 失败于 etcd 配置，参考上述手动修复</li>
+</ul>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://github.com/kubernetes-sigs/kubespray/blob/v2.28.0/docs/operations/recover-control-plane.md">Recovering the control plane</a></li>
+<li><a href="https://github.com/kubernetes-sigs/kubespray/pull/12350/commits/7d051ff3261f0b28a163c97d6327947ee1b023ee">Fix ETCD_INITIAL_CLUSTER config in etcd.env and etcd-events.env</a></li>
+</ul>

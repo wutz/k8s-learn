@@ -1,0 +1,233 @@
+<h1 id="添加工作节点到租户集群">添加工作节点到租户集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#添加工作节点到租户集群">#</a></h1>
+<p>创建 Kamaji 租户控制平面后，需要添加工作节点来运行实际的工作负载。本文档介绍几种常见的添加工作节点的方法。</p>
+<h2 id="方式一使用-kubeadm-手动加入">方式一：使用 kubeadm 手动加入<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式一使用-kubeadm-手动加入">#</a></h2>
+<h3 id="1-准备工作节点">1. 准备工作节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-准备工作节点">#</a></h3>
+<p>在工作节点上安装必要的组件：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装容器运行时（以 containerd 为例）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置 containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">containerd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/containerd/config.toml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 kubeadm, kubelet, kubectl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apt-transport-https</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ca-certificates</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> curl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -fsSL</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  gpg</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --dearmor</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/apt/keyrings/kubernetes-apt-keyring.gpg</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/apt/sources.list.d/kubernetes.list</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> update</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubelet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubectl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt-mark</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hold</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubelet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubectl</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动 kubelet</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --now</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubelet</span></span></code></pre>
+<h3 id="2-获取-join-token">2. 获取 join token<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-获取-join-token">#</a></h3>
+<p>从管理集群获取 join token：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用租户集群的 kubeconfig</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">tenant-kubeconfig</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 join token</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> token</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --print-join-command</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 输出示例：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># kubeadm join 192.168.1.100:6443 --token abcdef.0123456789abcdef \</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   --discovery-token-ca-cert-hash sha256:1234567890abcdef...</span></span></code></pre>
+<h3 id="3-在工作节点上执行-join-命令">3. 在工作节点上执行 join 命令<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-在工作节点上执行-join-命令">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在工作节点上执行（需要 root 权限）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> join</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.1.100:6443</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --token</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> abcdef.0123456789abcdef</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --discovery-token-ca-cert-hash</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sha256:1234567890abcdef...</span></span></code></pre>
+<h3 id="4-验证节点加入">4. 验证节点加入<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-验证节点加入">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在管理集群上，使用租户集群的 kubeconfig</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 应该看到新加入的节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">          STATUS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   ROLES</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    AGE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   VERSION</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">worker-node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   Ready</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">    &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">non</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   1m</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    v1.29.0</span></span></code></pre>
+<h2 id="方式二使用-cluster-api">方式二：使用 Cluster API<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式二使用-cluster-api">#</a></h2>
+<p>Kamaji 提供了 <a href="https://github.com/clastix/cluster-api-control-plane-provider-kamaji">Cluster API Control Plane Provider</a>，可以与 Cluster API 基础设施提供商集成，自动管理工作节点。</p>
+<h3 id="1-安装-cluster-api-和-kamaji-provider">1. 安装 Cluster API 和 Kamaji Provider<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-安装-cluster-api-和-kamaji-provider">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 clusterctl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -L</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.6.0/clusterctl-linux-amd64</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterctl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">chmod</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> +x</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterctl</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clusterctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/local/bin/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 初始化 Cluster API（以 Docker 为例）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">clusterctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> init</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --infrastructure</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> docker</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 Kamaji Control Plane Provider</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">clusterctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> init</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --control-plane</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji</span></span></code></pre>
+<h3 id="2-创建-cluster-api-集群">2. 创建 Cluster API 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-创建-cluster-api-集群">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 生成集群配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">clusterctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generate</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant-cluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --infrastructure</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> docker</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --control-plane</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --kubernetes-version</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v1.29.0</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --worker-machine-count</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 应用配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待集群就绪</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster/tenant-cluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=600s</span></span></code></pre>
+<h3 id="3-获取-kubeconfig">3. 获取 kubeconfig<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-获取-kubeconfig">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取租户集群 kubeconfig</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">clusterctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant-cluster</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant-kubeconfig.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span></code></pre>
+<h2 id="方式三使用虚拟节点virtual-kubelet">方式三：使用虚拟节点（Virtual Kubelet）<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式三使用虚拟节点virtual-kubelet">#</a></h2>
+<p>对于无服务器或边缘场景，可以使用 Virtual Kubelet 创建虚拟节点。</p>
+<h3 id="1-安装-virtual-kubelet">1. 安装 Virtual Kubelet<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-安装-virtual-kubelet">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 Helm 安装（示例）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> repo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virtual-kubelet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://virtual-kubelet.github.io/virtual-kubelet</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virtual-kubelet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> virtual-kubelet/virtual-kubelet</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> provider=mock</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --kubeconfig=tenant-kubeconfig.yaml</span></span></code></pre>
+<h3 id="2-验证虚拟节点">2. 验证虚拟节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-验证虚拟节点">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 应该看到虚拟节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                STATUS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   ROLES</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   AGE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   VERSION</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">virtual-kubelet</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    agent</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   1m</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    v1.29.0-vk</span></span></code></pre>
+<h2 id="方式四使用自动化脚本">方式四：使用自动化脚本<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式四使用自动化脚本">#</a></h2>
+<p>对于批量添加节点，可以创建自动化脚本。</p>
+<h3 id="join-nodesh-示例">join-node.sh 示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#join-nodesh-示例">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#!/bin/bash</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -e</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置参数</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">CONTROL_PLANE_ENDPOINT</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">${1</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">:-</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">192</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">168</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">100</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">:</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">6443}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBECONFIG_PATH</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">${2</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">:-</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">tenant-kubeconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">yaml</span><span style="--shiki-light:#005CC5;--shiki-light-font-style:inherit;--shiki-dark:#E06C75;--shiki-dark-font-style:italic">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 join token</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> KUBECONFIG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$KUBECONFIG_PATH</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">JOIN_CMD</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> token</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --print-join-command</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在远程节点上执行 join</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 方式 1: 使用 SSH</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ssh user@worker-node "sudo $JOIN_CMD"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 方式 2: 使用 Ansible</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ansible worker-nodes -m shell -a "$JOIN_CMD" --become</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 方式 3: 使用 cloud-init（云环境）</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 将 JOIN_CMD 添加到 cloud-init 脚本中</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "Join command generated:"</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$JOIN_CMD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ""</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "Execute this command on worker nodes with root privileges."</span></span></code></pre>
+<h2 id="网络配置注意事项">网络配置注意事项<a class="heading-anchor" aria-hidden tabindex="-1" href="#网络配置注意事项">#</a></h2>
+<h3 id="1-确保网络连通性">1. 确保网络连通性<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-确保网络连通性">#</a></h3>
+<p>工作节点需要能够访问：</p>
+<ul>
+<li>控制平面 API Server（默认 6443 端口）</li>
+<li>Konnectivity Server（如果启用）</li>
+<li>Pod 网络（根据 CNI 插件要求）</li>
+</ul>
+<h3 id="2-配置防火墙规则">2. 配置防火墙规则<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-配置防火墙规则">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 工作节点需要开放的端口</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Kubelet API: 10250</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># NodePort Services: 30000-32767</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># CNI 插件端口（根据具体 CNI 而定）</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 示例：使用 ufw</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ufw</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 10250/tcp</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ufw</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 30000:32767/tcp</span></span></code></pre>
+<h3 id="3-安装-cni-插件">3. 安装 CNI 插件<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-安装-cni-插件">#</a></h3>
+<p>租户集群需要安装 CNI 插件来提供 Pod 网络：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 示例：安装 Calico</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  https://docs.projectcalico.org/manifests/calico.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 或安装 Cilium</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> repo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cilium</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://helm.cilium.io/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cilium</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cilium/cilium</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --version</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1.14.5</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --namespace</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --kubeconfig=tenant-kubeconfig.yaml</span></span></code></pre>
+<h2 id="故障排查">故障排查<a class="heading-anchor" aria-hidden tabindex="-1" href="#故障排查">#</a></h2>
+<h3 id="节点无法加入">节点无法加入<a class="heading-anchor" aria-hidden tabindex="-1" href="#节点无法加入">#</a></h3>
+<ol>
+<li><strong>检查网络连通性</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在工作节点上测试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">telnet</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 192.168.1.100</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 6443</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://192.168.1.100:6443/healthz</span></span></code></pre>
+<ol start="2">
+<li><strong>检查证书</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证 CA 证书哈希</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">openssl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> x509</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -pubkey</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -in</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/kubernetes/pki/ca.crt</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  openssl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rsa</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -pubin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -outform</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> der</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> 2></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/dev/null</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  openssl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dgst</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -sha256</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -hex</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> sed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/^.* //'</span></span></code></pre>
+<ol start="3">
+<li><strong>查看 kubelet 日志</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">journalctl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubelet</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span></span></code></pre>
+<h3 id="节点状态为-notready">节点状态为 NotReady<a class="heading-anchor" aria-hidden tabindex="-1" href="#节点状态为-notready">#</a></h3>
+<ol>
+<li><strong>检查 CNI 插件</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span></span></code></pre>
+<ol start="2">
+<li><strong>检查节点条件</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> describe</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span></code></pre>
+<ol start="3">
+<li><strong>检查容器运行时</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">crictl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> info</span></span></code></pre>
+<h2 id="最佳实践">最佳实践<a class="heading-anchor" aria-hidden tabindex="-1" href="#最佳实践">#</a></h2>
+<ol>
+<li>
+<p><strong>使用配置管理工具</strong></p>
+<ul>
+<li>使用 Ansible、Terraform 等工具自动化节点配置</li>
+<li>维护节点配置的版本控制</li>
+</ul>
+</li>
+<li>
+<p><strong>节点标签和污点</strong></p>
+</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 为节点添加标签</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  workload-type=compute</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加污点（如果需要）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tenant-kubeconfig.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> taint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  dedicated=special-workload:NoSchedule</span></span></code></pre>
+<ol start="3">
+<li>
+<p><strong>监控节点健康</strong></p>
+<ul>
+<li>部署 Node Exporter 收集节点指标</li>
+<li>配置告警规则监控节点状态</li>
+<li>定期检查节点资源使用情况</li>
+</ul>
+</li>
+<li>
+<p><strong>安全加固</strong></p>
+<ul>
+<li>最小化工作节点上的软件包</li>
+<li>配置 SELinux/AppArmor</li>
+<li>定期更新系统和 Kubernetes 组件</li>
+<li>使用 Pod Security Standards</li>
+</ul>
+</li>
+</ol>
+<h2 id="参考资源">参考资源<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考资源">#</a></h2>
+<ul>
+<li><a href="https://kubernetes.io/docs/reference/setup-tools/kubeadm/">kubeadm 官方文档</a></li>
+<li><a href="https://cluster-api.sigs.k8s.io/">Cluster API 文档</a></li>
+<li><a href="https://github.com/clastix/cluster-api-control-plane-provider-kamaji">Kamaji Cluster API Provider</a></li>
+<li><a href="https://virtual-kubelet.io/">Virtual Kubelet</a></li>
+</ul>

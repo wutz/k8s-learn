@@ -1,0 +1,22 @@
+<h1 id="spegel">Spegel<a class="heading-anchor" aria-hidden tabindex="-1" href="#spegel">#</a></h1>
+<h2 id="简介">简介<a class="heading-anchor" aria-hidden tabindex="-1" href="#简介">#</a></h2>
+<p><a href="https://github.com/spegel-org/spegel">Spegel</a> 是一个轻量级的镜像 P2P 服务, 相比 Dragonfly 更轻量.</p>
+<ul>
+<li>只支持 containerd</li>
+</ul>
+<p>本方案是缺省的镜像 P2P 服务, 随 base 基础服务一起部署. 备选方案是 <a href="/lessons/repo/dragonfly">Dragonfly</a>, 两者部署其一即可.</p>
+<p>需要预热 (preheat), 分发模型权重等非镜像文件, 或者节点运行时不是 containerd 时, 改用 Dragonfly. 选型对比见 <a href="/lessons/repo">仓库服务</a>.</p>
+<h2 id="依赖">依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#依赖">#</a></h2>
+<ul>
+<li>containerd 配置 <code>containerd_discard_unpacked_layers: false</code></li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>询问用户是否添加额外加速 registry host 到 <a href="https://github.com/wutz/k8s-in-action/blob/main/base/spegel/values.yml">values.yml</a> 中 <code>mirroredRegistries</code> 列表</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="验证">验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> spegel</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> port-forward</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc/spegel</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 9090</span></span></code></pre>
+<p>访问 <a href="http://localhost:9090/debug/web">http://localhost:9090/debug/web</a> 查看 Spegel UI, 如果一切正常则 <code>Last Mirror Success</code> 显示一个时间而非 <code>Pending</code></p>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

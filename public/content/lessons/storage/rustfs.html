@@ -1,0 +1,13 @@
+<h1 id="rustfs">RustFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#rustfs">#</a></h1>
+<blockquote>
+<p>minio 平替</p>
+</blockquote>
+<p><a href="https://github.com/rustfs/rustfs">RustFS</a> 是一个高性能、分布式的对象存储系统，基于 Rust 构建，Rust 是全球最受欢迎的编程语言之一。RustFS 将 MinIO 的简单性与 Rust 的内存安全和原始性能相结合。它提供了完全符合 S3 标准的功能，完全开源，并针对数据湖、人工智能和大数据工作负载进行了优化。</p>
+<h2 id="单机部署">单机部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#单机部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> run</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rustfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --net</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> host</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> always</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -v</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $PWD</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/data:/data</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  rustfs/rustfs:latest</span></span></code></pre>
+<p>访问 <a href="http://localhost:9001">http://localhost:9001</a> 访问控制台, 默认用户名和密码为 <code>rustfsadmin/rustfsadmin</code></p>

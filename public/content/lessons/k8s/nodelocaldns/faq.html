@@ -1,0 +1,21 @@
+<h1 id="nodelocaldns-faq">NodeLocalDNS FAQ<a class="heading-anchor" aria-hidden tabindex="-1" href="#nodelocaldns-faq">#</a></h1>
+<h2 id="域名配置多个ip但容器内ping始终返回第一个地址">域名配置多个IP，但容器内ping始终返回第一个地址<a class="heading-anchor" aria-hidden tabindex="-1" href="#域名配置多个ip但容器内ping始终返回第一个地址">#</a></h2>
+<p>需要配置上 <code>loadbalance</code>，例如：</p>
+<pre><code>    .:53 {
+        hosts {
+          100.64.4.1 example.cs1.bz1.paratera.com
+          100.64.4.2 example.cs1.bz1.paratera.com
+          100.64.4.3 example.cs1.bz1.paratera.com
+          fallthrough
+        }
+        errors
+        log
+        cache 30
+        reload
+        loadbalance
+        loop
+        bind 169.254.25.10
+        forward . 223.5.5.5 119.29.29.29
+        prometheus :9253
+    }
+</code></pre>

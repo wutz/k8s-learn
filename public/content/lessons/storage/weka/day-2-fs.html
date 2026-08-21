@@ -1,0 +1,69 @@
+<h1 id="weka-文件系统管理">Weka 文件系统管理<a class="heading-anchor" aria-hidden tabindex="-1" href="#weka-文件系统管理">#</a></h1>
+<h2 id="创建组织">创建组织<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建组织">#</a></h2>
+<ul>
+<li>最大支持 256 个组织</li>
+<li>每个组织一个组织管理员</li>
+<li>缺省组织为 root</li>
+<li>使用 ClusterAdmin 创建新组织</li>
+<li>必须为每个租户创建一个组织管理员来分离权限</li>
+<li>创建组织设置 Total Quota 即可</li>
+</ul>
+<p>例如为 deepseek 租户创建组织 deepseek 且管理员为 deepseek-admin, 并设置 100Ti 存储容量:</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用集群管理员登录</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建组织, 用户名前使用组织缩写方便区分</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> org</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deepseek1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1admin</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">passwor</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">d</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --total-quota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 100TiB</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看组织列表</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> org</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span></code></pre>
+<blockquote>
+<p>GUI 管理参见 <a href="https://docs.weka.io/4.4/operation-guide/organizations/organizations">组织管理</a></p>
+</blockquote>
+<h2 id="创建用户">创建用户<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建用户">#</a></h2>
+<p>为不同用途创建不同权限的用户:</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用组织管理员登录组织 deepseek1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --org</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deepseek1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 Regular 用于 Linux 挂载使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1mount</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> regular</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">passwor</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">d</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 CSI 权限用户用于 K8S 集群使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1csi</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csi</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">passwor</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">d</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看用户列表</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span></span></code></pre>
+<blockquote>
+<p>GUI 管理参见 <a href="https://docs.weka.io/4.4/operation-guide/user-management/user-management">用户管理</a></p>
+</blockquote>
+<h2 id="创建文件组">创建文件组<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建文件组">#</a></h2>
+<ul>
+<li>主要用于存储分层策略设置</li>
+<li>weka 最多支持 8 个文件组</li>
+<li>可以只创建一个复用</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用集群管理员 admin 登录</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --org</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建文件组 default</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> group</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span></span></code></pre>
+<blockquote>
+<p>GUI 管理参见 <a href="https://docs.weka.io/4.4/weka-filesystems-and-object-stores/managing-filesystem-groups/managing-filesystem-groups">文件组管理</a></p>
+</blockquote>
+<h2 id="创建文件系统">创建文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建文件系统">#</a></h2>
+<ul>
+<li>weka 支持最多 1024 个文件系统</li>
+<li>不再 root 组织下创建文件系统，如果需要则必须开启认证挂载</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用组织管理员 ds1admin 登录组织 deepseek1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --org</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deepseek1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建文件系统 ds1fs1 配置使用 thin 模式，容量上限为 50TiB</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ds1fs1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 50TiB</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --thin-provision-min-ssd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 1GiB</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --thin-provision-max-ssd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 50TiB</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看文件系统列表</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span></span></code></pre>
+<blockquote>
+<p>GUI 管理参见 <a href="https://docs.weka.io/4.4/weka-filesystems-and-object-stores/managing-filesystems/managing-filesystems">文件系统管理</a></p>
+</blockquote>
+<h2 id="分层存储">分层存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#分层存储">#</a></h2>
+<p>参见 <a href="/lessons/storage/weka/day-2-fs-tiering">Weka 分层存储</a></p>

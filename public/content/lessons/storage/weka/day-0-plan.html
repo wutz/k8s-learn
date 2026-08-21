@@ -1,0 +1,130 @@
+<h1 id="weka-规划">Weka 规划<a class="heading-anchor" aria-hidden tabindex="-1" href="#weka-规划">#</a></h1>
+<h2 id="容量和冗余管理">容量和冗余管理<a class="heading-anchor" aria-hidden tabindex="-1" href="#容量和冗余管理">#</a></h2>
+<ul>
+<li>冗余和包含级别
+<ul>
+<li>支持 D+P: N+2, N+3 或 N+4 保护</li>
+<li>其中 D <strong>必须大于</strong> P (例如不允许 3+3)</li>
+<li>一般集群推荐使用 N+2 保护, 承受最多2台服务或者2块盘同时故障</li>
+<li>超大规模（> 100 节点）推荐使用 N+4 保护, 承受最多2台服务或者4块盘同时故障</li>
+<li>一旦冗余级别不再允许修改</li>
+</ul>
+</li>
+<li>条带宽度
+<ul>
+<li>条带宽度即 D+P 值, 例如 3+2 条带宽度为 5</li>
+<li>条带宽度支持 5 到 20</li>
+<li>较大条带宽度可以提高写入吞吐，因为检验开销占比小</li>
+</ul>
+</li>
+<li>热备容量
+<ul>
+<li>缺省总是使总空间 1/N 作为热备，例如 3+2 实际按照 3+2+1 部署</li>
+<li>热备容量代表不影响可用容量下，可以承受的故障域数量</li>
+<li>缺省热备容量为 1，即一台服务器</li>
+</ul>
+</li>
+<li>预留容量比率: 扣除数据保护和热备容量后，预留 10% 作为 Weka 内部使用</li>
+<li>SSD 可用容量计算公式
+<ul>
+<li>可用容量 = 裸容量x0.909 x (故障域数量-热备容量) / 故障域数量 x 数据块/(数据块+校验块) x (1-预留容量比率)</li>
+<li>例如 6 台，每台 12 块 7.68 TB, 使用 3+2 保护, 则 <code>6*12*7.68TB*0.909*(6-1)/6*3/(3+2)*0.9 = 226 TiB</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="文件系统">文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#文件系统">#</a></h2>
+<ul>
+<li>支持多达 1024 个文件系统，单文件最大 4PB</li>
+<li>支持数据缩减，需要拥有 DEO 许可</li>
+<li>支持加密文件系统</li>
+<li>文件系统元数据数量与分配容量相关，可以修改 max-files 覆盖缺省值
+<ul>
+<li>每个元数据占用 4KB 的 SSD 和 20B RAM</li>
+<li>不同文件大小分配不同元数据数量：&#x3C; 0.5M = 1, 0.5M - 1M = 2, > 1M = 2+(total-1M)/1M, 目录占用 2 个</li>
+</ul>
+</li>
+</ul>
+<h2 id="网络">网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#网络">#</a></h2>
+<ul>
+<li>支持 IB, RoCE 和 ETH</li>
+<li>在 ETH 上使用 DPDK, 通过 UDP 实现 Weka 协议
+<ul>
+<li>使用 Mellanox 网卡时需要安装 Mellanox OFED 驱动实现的 DPDK</li>
+</ul>
+</li>
+<li>运行管理控制和数据流量可以配置在同一个网卡上</li>
+<li>网络高可用
+<ul>
+<li>服务端至少配置双网卡连接不同交换机; 如果每网卡配置双口则需要同网卡 Bonding 连接同一交换机上</li>
+</ul>
+</li>
+<li>RDMA, RoCE 和 GDS 支持
+<ul>
+<li>缺省启动 RDMA （包含 RoCE)</li>
+<li>加密文件系统不支持 RDMA 和 GDS，自动会退到标准协议上</li>
+<li>确认 RDMA 是否启用执行 <code>weka cluster processes</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="架构">架构<a class="heading-anchor" aria-hidden tabindex="-1" href="#架构">#</a></h2>
+<p><img src="/content/images/a08c7d56-io-path.png" alt="io-path">
+<img src="/content/images/f5ba9f1a-mcb.png" alt="mcb"></p>
+<ul>
+<li>drive process: 管理 SSD 并处理 IO 操作, 每个进程需要专用 core</li>
+<li>compute process: 处理文件系统，集群级功能和客户端 IO，每个进程需要专用 core</li>
+<li>frontend process: 管理 POSIX 客户端访问并协调 drive 和 compute 进程，每个进程需要专用 core</li>
+<li>management process: 负责监督整个集群，可以共享 core, 该进程使用 kernel 管理网络和 core</li>
+</ul>
+<h2 id="软硬配置">软硬配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#软硬配置">#</a></h2>
+<ul>
+<li>推荐 8 台服务器（至少 6 台）</li>
+<li>os
+<ul>
+<li>Rocky Linux 8/9</li>
+<li>Ubuntu 18.04/20.04/22.04/24.04</li>
+</ul>
+</li>
+<li>system disk
+<ul>
+<li>至少 960 GB SSD</li>
+<li>安装在 <code>/opt/weka</code></li>
+</ul>
+</li>
+<li>data disk:
+<ul>
+<li>4/8/12 块 NVMe PCIe 4.0 SSD (PM9A3)</li>
+<li>如果配置 24 块 SSD 性能不会提升</li>
+</ul>
+</li>
+<li>cpu
+<ul>
+<li>双路 Intel</li>
+<li>单路 AMD EPYC (客户端支持双路 AMD EYPC)</li>
+<li>每个容器最大只能使用 19 核</li>
+<li>每个 SSD 使用 1 核, 如果 SSD 更多则 2 块 SSD 使用 1 核</li>
+<li>drive process 与 compute process 比例为 1:2, 例如 12 块 SSD 则需要核为 12*(1+2) = 36 核</li>
+<li>frontend 一般使用 2 核</li>
+</ul>
+</li>
+<li>memory:
+<ul>
+<li>参考 <a href="https://docs.weka.io/4.4/planning-and-installation/bare-metal/planning-a-weka-system-installation#memory-resource-planning">Weka 内存配置</a></li>
+<li>通常 384 GB 内存足以满足大部分情况</li>
+</ul>
+</li>
+</ul>
+<h3 id="参考配置">参考配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考配置">#</a></h3>
+<ul>
+<li>CPU: 2* Intel 5418Y</li>
+<li>Memory: 12* 32GB DDR4</li>
+<li>System Disk: 2* 960GB SATA SSD RAID1</li>
+<li>Data Disk: 4/8/12* 7.68TB NVMe PCIe 4.0 SSD (PM9A3)</li>
+<li>Network: 2* Mellanox ConnectX-6 <strong>Dual Port</strong> 100/200Gb ETH/RoCE/IB</li>
+</ul>
+<p>此最大配置下性能预估，每盘提供：</p>
+<ul>
+<li>BW Read：3500 MiB/s</li>
+<li>BW Write: 955 MiB/s</li>
+<li>IOPS Read: 160 kops</li>
+<li>IOPS Write: 20 kops</li>
+</ul>

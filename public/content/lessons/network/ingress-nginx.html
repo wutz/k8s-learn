@@ -1,0 +1,15 @@
+<h1 id="ingress-nginx">Ingress Nginx<a class="heading-anchor" aria-hidden tabindex="-1" href="#ingress-nginx">#</a></h1>
+<p><a href="https://github.com/kubernetes/ingress-nginx">ingress-nginx</a> 是一个 Kubernetes 的 Ingress 控制器，它使用 NGINX 作为反向代理和负载均衡器。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/ingress-nginx/values.yaml">values.yaml</a> 中的配置 <code>controller.service.loadBalancerIP</code> 为 Service Nginx 的 IP 地址</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<p>配置 DNS 解析到 Service Nginx 的 IP 上 (需要联系 DNS 管理员配置解析)</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 Service Nginx 的 EXTERNAL-IP</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ingress-nginx-controller</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ingress-nginx</span></span></code></pre>
+<ul>
+<li>从上述获取到为内网 IP <code>172.18.15.210</code>, 则解析 <code>*.dev1.bj1.example.com</code> 到 <code>172.18.15.210</code></li>
+<li>如果上述 IP 配置外网一对一 NAT，例如 <code>1.2.3.4</code>, 则解析 <code>*.dev1.bj1.example.com</code> 到 <code>1.2.3.4</code></li>
+<li>如果上述 IP 为外网 IP， 例如 <code>1.2.3.4</code>, 则解析 <code>*.dev1.bj1.example.com</code> 到 <code>1.2.3.4</code></li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

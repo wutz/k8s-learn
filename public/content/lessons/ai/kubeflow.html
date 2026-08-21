@@ -1,0 +1,442 @@
+<h1 id="kubeflow"><a href="https://www.kubeflow.org/docs/started/introduction/">Kubeflow</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeflow">#</a></h1>
+<p>Kubeflow 是基于 Kubernetes 的开源 AI/ML 平台，为构建端到端的 AI 平台提供基础工具集。它由多个子项目组成，覆盖 AI 生命周期的各个阶段，包括数据处理、模型训练、调优、管道编排和模型服务等。</p>
+<h1 id="前置准备必做">前置准备（必做）<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置准备必做">#</a></h1>
+<ul>
+<li>K8s 版本：查 release notes 匹配（当前支持 1.35/1.36+）。</li>
+<li>内核调优（所有节点）：</li>
+</ul>
+<pre><code class="language-Bash">sudo sysctl fs.inotify.max_user_instances=2280
+sudo sysctl fs.inotify.max_user_watches=1255360
+</code></pre>
+<ul>
+<li>GPU：安装 GPU Operator，label/taint GPU 节点。</li>
+<li>Storage：高性能 StorageClass（必须准备一个default sc） + S3 兼容对象存储（kubeflow 默认使用 SeaweedFS，在pipeline章节默认自动安装）。</li>
+<li>节点资源（infra 控制面节点）：Kubeflow 控制面组件（含 Istio/Knative/认证/证书等依赖）requests 总量约 5.3核 CPU / 10.8Gi 内存。单节点最低 8核/16Gi，推荐 16核/32Gi。</li>
+<li>工具：kubectl、kustomize（最新）。</li>
+</ul>
+<h1 id="离线-vendor-化按需执行">离线 vendor 化（按需执行）<a class="heading-anchor" aria-hidden tabindex="-1" href="#离线-vendor-化按需执行">#</a></h1>
+<p>部分组件直接引用 GitHub URL，离线/内网环境的 <code>kustomize build</code> 会失败。下面按组件独立列出，<strong>只需为你计划安装的组件执行对应章节</strong>：</p>
+<ul>
+<li><a href="#pipeline-%E7%BB%84%E4%BB%B6-vendor-argo-workflows-v373">Pipeline 组件 vendor (argo-workflows v3.7.3)</a>：仅安装 Kubeflow Pipelines 时执行</li>
+<li><a href="#trainer-%E7%BB%84%E4%BB%B6-vendor-jobset-v0101">Trainer 组件 vendor (jobset v0.10.1)</a>：仅安装 Trainer (training operator v2) 时执行</li>
+</ul>
+<blockquote>
+<p>如果你的部署节点能直接访问 GitHub（如有出网代理），可以跳过本章节。</p>
+</blockquote>
+<h2 id="pipeline-组件-vendor-argo-workflows-v373">Pipeline 组件 vendor (argo-workflows v3.7.3)<a class="heading-anchor" aria-hidden tabindex="-1" href="#pipeline-组件-vendor-argo-workflows-v373">#</a></h2>
+<p><code>applications/pipeline/upstream/third-party/argo/</code> 下若干 <code>kustomization.yaml</code> 直接引用了 GitHub URL（<code>https://github.com/argoproj/argo-workflows/...?ref=v3.7.3</code>）。每次 <code>kustomize build</code> 都会触发 git fetch，<strong>离线/内网受限环境会失败</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>error: accumulating resources: ...</span></span>
+<span class="line"><span>Get "https://github.com/argoproj/argo-workflows/manifests/base/crds/minimal?ref=v3.7.3": dial tcp ...: connection timed out</span></span></code></pre>
+<p>修复思路：在一台能访问 GitHub 的机器上把 argo-workflows v3.7.3 manifests 拉下来 vendor 到本仓库，把 kustomization 改成引用本地路径。<strong>这一步是一次性工作，做完后随仓库一起提交，后续部署不再需要外网。</strong></p>
+<h3 id="步骤-1在能访问-github-的机器上下载-manifests">步骤 1：在能访问 GitHub 的机器上下载 manifests<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-1在能访问-github-的机器上下载-manifests">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">git</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clone</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --depth=1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v3.7.3</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://github.com/argoproj/argo-workflows.git</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/argo-workflows</span></span></code></pre>
+<p>将下面四个目录打包，传到部署服务器：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/argo-workflows</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tar</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> czf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/argo-v3.7.3-manifests.tar.gz</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  manifests/base/crds/minimal</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  manifests/base/workflow-controller</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  manifests/cluster-install-no-crds/workflow-controller-rbac</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  manifests/namespace-install/workflow-controller-rbac</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 上传到部署服务器（示例）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/argo-v3.7.3-manifests.tar.gz</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">use</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">r</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">@</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">maste</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">r</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:/tmp/</span></span></code></pre>
+<h3 id="步骤-2将-manifests-vendor-到仓库">步骤 2：将 manifests vendor 到仓库<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-2将-manifests-vendor-到仓库">#</a></h3>
+<p>在仓库根目录（即 <code>community-distribution-26.03/</code>）下执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai/kubeflow/community-distribution/community-distribution-26.03</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 vendor 目录</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">VENDOR</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">applications/pipeline/upstream/third-party/argo/vendor</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $VENDOR</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 解压 manifests 到 vendor 目录</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tar</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> xzf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/argo-v3.7.3-manifests.tar.gz</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -C</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/manifests/base/crds/minimal</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">                                $VENDOR</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/crds-minimal</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/manifests/base/workflow-controller</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">                         $VENDOR</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/workflow-controller</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/manifests/cluster-install-no-crds/workflow-controller-rbac</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $VENDOR</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/workflow-controller-rbac-cluster</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/manifests/namespace-install/workflow-controller-rbac</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">       $VENDOR</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/workflow-controller-rbac-namespace</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证结构（每个目录里都应有自己的 kustomization.yaml）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">find</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $VENDOR</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kustomization.yaml</span></span></code></pre>
+<p>预期输出：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>applications/pipeline/upstream/third-party/argo/vendor/crds-minimal/kustomization.yaml</span></span>
+<span class="line"><span>applications/pipeline/upstream/third-party/argo/vendor/workflow-controller/kustomization.yaml</span></span>
+<span class="line"><span>applications/pipeline/upstream/third-party/argo/vendor/workflow-controller-rbac-cluster/kustomization.yaml</span></span>
+<span class="line"><span>applications/pipeline/upstream/third-party/argo/vendor/workflow-controller-rbac-namespace/kustomization.yaml</span></span></code></pre>
+<h3 id="步骤-3改-kustomization-指向本地">步骤 3：改 kustomization 指向本地<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-3改-kustomization-指向本地">#</a></h3>
+<p>修改下面 4 个文件，把每个 <code>https://github.com/argoproj/argo-workflows/...?ref=v3.7.3</code> 替换成本地相对路径：</p>
+<p><strong>3.1</strong> <code>applications/pipeline/upstream/third-party/argo/base/kustomization.yaml</code></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> resources:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-- https://github.com/argoproj/argo-workflows/manifests/base/workflow-controller?ref=v3.7.3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+- ../vendor/workflow-controller</span></span></code></pre>
+<p><strong>3.2</strong> <code>applications/pipeline/upstream/third-party/argo/installs/cluster/kustomization.yaml</code></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> resources:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-- https://github.com/argoproj/argo-workflows/manifests/base/crds/minimal?ref=v3.7.3</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-- https://github.com/argoproj/argo-workflows/manifests/cluster-install-no-crds/workflow-controller-rbac?ref=v3.7.3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+- ../../vendor/crds-minimal</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+- ../../vendor/workflow-controller-rbac-cluster</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> - ../../base</span></span></code></pre>
+<p><strong>3.3</strong> <code>applications/pipeline/upstream/third-party/argo/installs/namespace/kustomization.yaml</code></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> resources:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-- https://github.com/argoproj/argo-workflows/manifests/namespace-install/workflow-controller-rbac?ref=v3.7.3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+- ../../vendor/workflow-controller-rbac-namespace</span></span></code></pre>
+<p><strong>3.4</strong> <code>applications/pipeline/upstream/third-party/argo/installs/namespace/cluster-scoped/kustomization.yaml</code></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> resources:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-- https://github.com/argoproj/argo-workflows/manifests/base/crds/minimal?ref=v3.7.3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+- ../../../vendor/crds-minimal</span></span></code></pre>
+<h3 id="步骤-4本地验证-kustomize-build-通过">步骤 4：本地验证 kustomize build 通过<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-4本地验证-kustomize-build-通过">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> applications/pipeline/upstream/third-party/argo/installs/cluster</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/dev/null</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> OK</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/pipeline</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/dev/null</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> OK</span></span></code></pre>
+<p>两条都输出 <code>OK</code> 即代表 Pipeline vendor 化完成，可以进入下面的部署流程。</p>
+<h2 id="trainer-组件-vendor-jobset-v0101">Trainer 组件 vendor (jobset v0.10.1)<a class="heading-anchor" aria-hidden tabindex="-1" href="#trainer-组件-vendor-jobset-v0101">#</a></h2>
+<p><code>applications/trainer/upstream/third-party/jobset/kustomization.yaml</code> 直接引用了 GitHub release 文件，离线环境会失败：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>error: accumulating resources: ...</span></span>
+<span class="line"><span>Get "https://github.com/kubernetes-sigs/jobset/releases/download/v0.10.1/manifests.yaml": dial tcp ...: connection timed out</span></span></code></pre>
+<p>修复思路：把 jobset release manifest 下载到 <code>applications/trainer/upstream/third-party/jobset/</code> 目录里（jobset 引用的是单一 yaml 文件，与 argo 的 git 目录引用方式不同，因此 vendor 形式更简单），把 kustomization 改成引用本地文件名。</p>
+<h3 id="步骤-1在能访问-github-的机器上下载-manifest">步骤 1：在能访问 GitHub 的机器上下载 manifest<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-1在能访问-github-的机器上下载-manifest">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -fL</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/jobset-v0.10.1-manifests.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  https://github.com/kubernetes-sigs/jobset/releases/download/v0.10.1/manifests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 上传到部署服务器（示例）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/jobset-v0.10.1-manifests.yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">use</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">r</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">@</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">maste</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">r</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:/tmp/</span></span></code></pre>
+<h3 id="步骤-2将-manifest-vendor-到仓库">步骤 2：将 manifest vendor 到仓库<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-2将-manifest-vendor-到仓库">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai/kubeflow/community-distribution/community-distribution-26.03</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># jobset 目录已存在，直接把 manifest 放在 kustomization.yaml 同级</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/jobset-v0.10.1-manifests.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   applications/trainer/upstream/third-party/jobset/manifests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ls</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> applications/trainer/upstream/third-party/jobset/manifests.yaml</span></span></code></pre>
+<h3 id="步骤-3改-kustomization-指向本地-1">步骤 3：改 kustomization 指向本地<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-3改-kustomization-指向本地-1">#</a></h3>
+<p>修改 <code>applications/trainer/upstream/third-party/jobset/kustomization.yaml</code>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> resources:</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-  - https://github.com/kubernetes-sigs/jobset/releases/download/v0.10.1/manifests.yaml</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+  - manifests.yaml</span></span></code></pre>
+<h3 id="步骤-4本地验证-kustomize-build-通过-1">步骤 4：本地验证 kustomize build 通过<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-4本地验证-kustomize-build-通过-1">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kustomize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/trainer</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/dev/null</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> OK</span></span></code></pre>
+<p>输出 <code>OK</code> 即代表 Trainer vendor 化完成。</p>
+<hr>
+<h1 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h1>
+<h2 id="分组件安装推荐生产调试">分组件安装（推荐生产/调试）：<a class="heading-anchor" aria-hidden tabindex="-1" href="#分组件安装推荐生产调试">#</a></h2>
+<ul>
+<li>先 common（kubeflow-namespace → cert-manager → istio → dex 等）。</li>
+<li>再 applications（pipelines → trainer → notebooks → kserve 等）。</li>
+<li>每个组件都有 ./tests/xxx_install.sh 脚本可参考（CI 验证过）。</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> community-distribution-26.03</span></span></code></pre>
+<h2 id="配置-kubeflow-部署节点">配置 kubeflow 部署节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置-kubeflow-部署节点">#</a></h2>
+<p>Kubeflow 控制面组件需要固化运行在专用 infra 节点（<code>ai-modeltrain-prod-kworker-01/02/03-cpu</code>），与 GPU 业务节点、control-plane 节点隔离。</p>
+<p><strong>方案原理</strong>：给三台节点打 <code>NoSchedule</code> taint，组件 wrapper 通过 Kustomize Component 统一注入对应 toleration；用户业务负载（Notebook、TrainJob、InferenceService 等）不带此 toleration，调度器自动将其排除到 GPU 节点池。</p>
+<p><strong>节点打标与 taint</strong>（IaC 维护，节点初始化时执行）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># label：语义标识（非调度必需）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai-modeltrain-prod-kworker-0{1,2,3}-cpu</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  scclabs.dev/node-pool=kubeflow-node</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># taint：排他性保障（核心）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> taint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai-modeltrain-prod-kworker-0{1,2,3}-cpu</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  scclabs.dev/node-pool=kubeflow-node:NoSchedule</span></span></code></pre>
+<p><strong>前置依赖</strong>：</p>
+<ul>
+<li>GPU 节点必须带 taint（如 <code>nvidia.com/gpu=present:NoSchedule</code>，由 GPU Operator 默认打）</li>
+<li>control-plane 节点必须带 taint（如 <code>node-role.kubernetes.io/control-plane:NoSchedule</code>，kubeadm 默认打）</li>
+</ul>
+<p>确认命令：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nodes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> json</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> jq</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '.items[] | "\(.metadata.name): \(.spec.taints // [])"'</span></span></code></pre>
+<p>所有部署命令均通过 <code>my-kubeflow/</code> 下的 wrapper 完成 toleration 注入，<strong>upstream 的 <code>common/</code> 和 <code>applications/</code> 文件保持原样不修改</strong>。</p>
+<h2 id="前置依赖metallb用于暴露-kubeflow-ui">前置依赖：MetalLB（用于暴露 Kubeflow UI）<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置依赖metallb用于暴露-kubeflow-ui">#</a></h2>
+<p>Kubeflow UI 通过 LoadBalancer Service 暴露，依赖 MetalLB 分配 VIP。<code>my-kubeflow/istio</code> wrapper 会把 <code>istio-ingressgateway</code> Service 改回 <code>LoadBalancer</code> 类型，并通过 MetalLB 注解固定到 VIP <code>10.81.215.101</code>。</p>
+<p><strong>部署 Kubeflow 前确认</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. MetalLB 已部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> metallb-system</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. IPAddressPool 包含 10.81.215.101</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ipaddresspools</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> metallb-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> addresses</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 目标 VIP 10.81.215.101 未被占用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{range .items[*]}{.status.loadBalancer.ingress[*].ip}{"\n"}{end}'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">  |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> sort</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 10.81.215.101</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 无输出即可用</span></span></code></pre>
+<p>未部署 MetalLB 参考 <a href="/lessons/network/metallb">network/metallb/README.md</a>。</p>
+<blockquote>
+<p>如需更换 VIP，修改 <code>community-distribution-26.03/my-kubeflow/istio/kustomization.yaml</code> 里 <code>metallb.universe.tf/loadBalancerIPs</code> 的值，重新 <code>kubectl apply -k my-kubeflow/istio</code> 即可。</p>
+</blockquote>
+<h2 id="前置依赖storageclass">前置依赖：StorageClass<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置依赖storageclass">#</a></h2>
+<p>Kubeflow 内部 3 个有状态服务需要持久化存储：</p>
+<table>
+<thead>
+<tr>
+<th>PVC</th>
+<th>组件</th>
+<th>用途</th>
+<th>大小</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>katib-mysql</code></td>
+<td>Katib</td>
+<td>实验元数据库</td>
+<td>10Gi</td>
+</tr>
+<tr>
+<td><code>mysql-pv-claim</code></td>
+<td>KFP</td>
+<td>Pipeline 元数据库</td>
+<td>20Gi</td>
+</tr>
+<tr>
+<td><code>seaweedfs-pvc</code></td>
+<td>KFP</td>
+<td>Pipeline artifact 对象存储（S3 兼容）</td>
+<td>20Gi</td>
+</tr>
+</tbody>
+</table>
+<p>upstream 的 PVC 没指定 <code>storageClassName</code>，集群无 default SC 时 PVC 会一直 Pending。<code>my-kubeflow/katib</code> 和 <code>my-kubeflow/pipeline</code> wrapper 已通过 patch 显式注入 <code>storageClassName: shared-gpfs</code>。</p>
+<p><strong>部署前确认 SC 可用</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> shared-gpfs</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：PROVISIONER=spectrumscale.csi.ibm.com，STATUS 为 Bound 时立即就绪</span></span></code></pre>
+<p><strong>如需改用其他 SC</strong>（如 <code>local-path</code>、其他 CSI 驱动等）：</p>
+<p>修改下面两个文件里的 <code>storageClassName</code> 字段（共 3 处）：</p>
+<ul>
+<li><code>community-distribution-26.03/my-kubeflow/katib/kustomization.yaml</code></li>
+<li><code>community-distribution-26.03/my-kubeflow/pipeline/kustomization.yaml</code></li>
+</ul>
+<p>然后重新 apply：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/katib</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/pipeline</span></span></code></pre>
+<blockquote>
+<p>⚠️ <strong>PVC 已创建后 <code>storageClassName</code> 不可变</strong>。如果之前已经 apply 过、PVC 处于 Pending 状态，需要先删 PVC 再 apply：</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pvc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> katib-mysql</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mysql-pv-claim</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> seaweedfs-pvc</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/katib</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/pipeline</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pvc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 确认已 Bound</span></span></code></pre>
+<h2 id="common-组件安装">common 组件安装<a class="heading-anchor" aria-hidden tabindex="-1" href="#common-组件安装">#</a></h2>
+<h3 id="kubeflow-namespace">Kubeflow Namespace<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeflow-namespace">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/kubeflow-namespace</span></span></code></pre>
+<h3 id="cert-manager">Cert-manager<a class="heading-anchor" aria-hidden tabindex="-1" href="#cert-manager">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/cert-manager/base</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'app=webhook'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=180s</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cert-manager</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/cert-manager</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'app.kubernetes.io/instance=cert-manager'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=180s</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cert-manager</span></span></code></pre>
+<h3 id="istio-必须">Istio （必须）<a class="heading-anchor" aria-hidden tabindex="-1" href="#istio-必须">#</a></h3>
+<ul>
+<li>
+<p>检查 <code>cilium</code> 是否符合配置要求，必须满足一下输出配置，理由如下</p>
+<p><strong>设置 bpf-lb-sock-hostns-only=true 后，Cilium socket LB 只在 host namespace 生效，不会干扰 Istio sidecar，安全性更高；缺少 bpf-lb-sock-hostns-only: "true"，这会导致 Istio sidecar 流量重定向被 Cilium 的 socket load balancing 干扰，从而出现 RBAC access denied on the central dashboard 或其他 Kubeflow 组件通信问题。</strong></p>
+<p><a href="/lessons/network/cilium">cilium 配置</a></p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">base</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">) </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">➜</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  ~</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> configmaps</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cilium-config</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -E</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'bpf-lb-sock-hostns-only|cni-exclusive'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  bpf-lb-sock-hostns-only:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "true"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  cni-exclusive:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "false"</span></span></code></pre>
+<ul>
+<li>部署 istio。<code>my-kubeflow/istio/</code> 已包含 <code>allow-host-remote-node-to-gateways.yaml</code>：放行 cilium reserved <code>host</code> / <code>remote-node</code> identity 到 ingressgateway，否则跨节点 LB / NodePort 流量会被 NetworkPolicy default-deny 丢弃（症状：port-forward 通、LB VIP 不通；详见 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/kubeflow/troubleshooting/2026-06-18-lb-vip-unreachable-final.md">troubleshooting/2026-06-18-lb-vip-unreachable-final.md</a>）。</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/istio/crds</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=Established</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=60s</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  crd/authorizationpolicies.security.istio.io</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  crd/gateways.networking.istio.io</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  crd/sidecars.networking.istio.io</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/istio/namespace</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/istio</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --all</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 180s</span></span></code></pre>
+<h3 id="oauth2-proxy">Oauth2-proxy<a class="heading-anchor" aria-hidden tabindex="-1" href="#oauth2-proxy">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/oauth2-proxy</span></span></code></pre>
+<h3 id="kubeflow-istio-resources">Kubeflow Istio Resources<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeflow-istio-resources">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/kubeflow-istio-resources</span></span></code></pre>
+<h3 id="multi-tenancy-components">Multi-tenancy components<a class="heading-anchor" aria-hidden tabindex="-1" href="#multi-tenancy-components">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/multi-tenancy</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/profiles-deployment</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 180s</span></span></code></pre>
+<h3 id="dex">Dex<a class="heading-anchor" aria-hidden tabindex="-1" href="#dex">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/dex</span></span></code></pre>
+<h3 id="赛力斯-iam-oidc-集成">赛力斯 IAM OIDC 集成<a class="heading-anchor" aria-hidden tabindex="-1" href="#赛力斯-iam-oidc-集成">#</a></h3>
+<blockquote>
+<p>仅当对接赛力斯 IAM 作为外部 IdP 时执行。Dex 配置（<code>my-kubeflow/dex/dex-config-patch.yaml</code>）已内置 <code>providerDiscoveryOverrides.authURL</code> 指向 adapter，无需额外修改。</p>
+</blockquote>
+<p><strong>前置</strong>：Istio + Kubeflow Istio Resources + oauth2-proxy 已部署（oauth2-proxy 的 AuthorizationPolicy 已内置 <code>/oidc-authorize-scope-rewriter/*</code> 路径排除）。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 从仓库根目录执行（adapter 不在 community-distribution 目录内）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai/kubeflow/oidc-authorize-scope-rewriter/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> oidc-authorize-scope-rewriter</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">       # 期望 2 Pod Running</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">            # 重启 Dex 加载 providerDiscoveryOverrides</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=60s</span></span></code></pre>
+<p><strong>验证</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -sI</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "https://staii.seres.cn/oidc-authorize-scope-rewriter/authorize?client_id=JT_STAII&#x26;redirect_uri=https%3A%2F%2Fstaii.seres.cn%2Fdex%2Fcallback&#x26;response_type=code&#x26;scope=openid+profile+email&#x26;state=test"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -iE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "^HTTP|^location"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望 302，Location 中 scope=openid</span></span></code></pre>
+<p>详见 <a href="/lessons/ai/kubeflow/oidc-authorize-scope-rewriter">oidc-authorize-scope-rewriter/README.md</a>。背景见 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/kubeflow/troubleshooting/2026-06-24-dex-iam-scope-constraint-final.md">troubleshooting/2026-06-24-dex-iam-scope-constraint-final.md</a>。</p>
+<h2 id="applications-组件安装">applications 组件安装<a class="heading-anchor" aria-hidden tabindex="-1" href="#applications-组件安装">#</a></h2>
+<h3 id="central-dashboard">Central Dashboard<a class="heading-anchor" aria-hidden tabindex="-1" href="#central-dashboard">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/central-dashboard</span></span></code></pre>
+<h3 id="admission-webhook">Admission Webhook<a class="heading-anchor" aria-hidden tabindex="-1" href="#admission-webhook">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/admission-webhook</span></span></code></pre>
+<h3 id="knative-used-by-kserve">Knative (used by KServe)<a class="heading-anchor" aria-hidden tabindex="-1" href="#knative-used-by-kserve">#</a></h3>
+<ul>
+<li>install Knative serving</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Knative serving-core.yaml 把 CRD 与依赖该 CRD 的 CR (Image/Certificate) 混在同一文件，</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 存在 race condition，需要重试 2~3 次直到 CRD 注册完成。</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">for</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> i</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> in</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 3</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/knative-serving</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">break</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">  echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "retry </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">: waiting for CRDs..."</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sleep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 10</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span></code></pre>
+<ul>
+<li>install Knative Eventing (可选)</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/knative-eventing</span></span></code></pre>
+<h3 id="kserve-model-serving-and-kserve-models-web-application">KServe model serving and KServe models web application<a class="heading-anchor" aria-hidden tabindex="-1" href="#kserve-model-serving-and-kserve-models-web-application">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/kserve</span></span></code></pre>
+<h3 id="kubeflow-pipelines-二选一安装即可">Kubeflow Pipelines （二选一安装即可）<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeflow-pipelines-二选一安装即可">#</a></h3>
+<blockquote>
+<p>⚠️ <strong>前提</strong>：必须先完成上文 <a href="#pipeline-%E7%BB%84%E4%BB%B6-vendor-argo-workflows-v373">Pipeline 组件 vendor (argo-workflows v3.7.3)</a> 章节，否则 <code>kustomize build</code> 会因 GitHub 网络拉取失败而中断。</p>
+</blockquote>
+<ul>
+<li>Database 模式 (默认推荐)</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># metacontroller CRD 来自 upstream third-party，不在 my-kubeflow 子树内，</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># kustomize 安全策略禁止 wrapper 引用上级文件，所以直接 apply 单个 CRD 文件</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># （和 upstream tests/pipelines_install.sh 做法一致）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> applications/pipeline/upstream/third-party/metacontroller/base/crd.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=established</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=60s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crd/compositecontrollers.metacontroller.k8s.io</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/pipeline</span></span></code></pre>
+<ul>
+<li>Kubernetes Native 模式 （备选，需自行新增对应 wrapper）</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> applications/pipeline/upstream/env/cert-manager/platform-agnostic-multi-user-k8s-native</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span></code></pre>
+<p>Kubeflow Pipelines（KFP 2.16.x）在 26.03 版本提供了<strong>两种完全不同的后端存储方式</strong>，选择取决于你的运维偏好和 GitOps 程度。</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th><strong>传统 Database 模式</strong>（推荐大多数用户）</th>
+<th><strong>Kubernetes Native API 模式</strong>（GitOps 友好）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pipeline 定义存储</strong></td>
+<td>MySQL/PostgreSQL 外部数据库</td>
+<td>Kubernetes CR（<code>Pipeline</code> / <code>PipelineVersion</code>）</td>
+</tr>
+<tr>
+<td><strong>安装命令</strong></td>
+<td><code>./tests/pipelines_install.sh</code></td>
+<td><code>kustomize build applications/pipeline/upstream/env/cert-manager/platform-agnostic-multi-user-k8s-native</code></td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>传统 UI + SDK 使用、生产多租户</td>
+<td>强 GitOps、声明式管理、CI/CD 流水线</td>
+</tr>
+<tr>
+<td><strong>优势</strong></td>
+<td>成熟、功能最全、UI 体验最佳</td>
+<td>原生 K8s 工具（kubectl、Argo CD）、无外部 DB 依赖</td>
+</tr>
+<tr>
+<td><strong>劣势</strong></td>
+<td>需要维护数据库、备份较复杂</td>
+<td>部分高级功能仍在完善、迁移成本</td>
+</tr>
+<tr>
+<td><strong>Artifact Store</strong></td>
+<td><strong>默认 SeaweedFS</strong>（S3 兼容，替代老 MinIO）</td>
+<td>同左，所有 overlay 已切换</td>
+</tr>
+<tr>
+<td><strong>多用户支持</strong></td>
+<td>原生支持（Profiles + RBAC）</td>
+<td>支持，但需注意 Admission Webhook</td>
+</tr>
+</tbody>
+</table>
+<p><strong>默认 Artifact Store 变化</strong>：所有 overlay 现在统一使用 <strong>SeaweedFS</strong> 作为 S3 兼容对象存储（替换 MinIO）。它负责存储 Pipeline 运行时的 artifacts（模型、数据、中间结果）。SeaweedFS 更轻量、高可用。</p>
+<h3 id="katib">Katib<a class="heading-anchor" aria-hidden tabindex="-1" href="#katib">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/katib</span></span></code></pre>
+<h3 id="notebooks-10">Notebooks 1.0<a class="heading-anchor" aria-hidden tabindex="-1" href="#notebooks-10">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/notebooks</span></span></code></pre>
+<h3 id="pvc-viewer-controller">PVC Viewer Controller<a class="heading-anchor" aria-hidden tabindex="-1" href="#pvc-viewer-controller">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/pvcviewer-controller</span></span></code></pre>
+<h3 id="volumes-web-application">Volumes Web Application<a class="heading-anchor" aria-hidden tabindex="-1" href="#volumes-web-application">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/volumes-web-app</span></span></code></pre>
+<h3 id="tensorboard-web-application-and-controller">Tensorboard web application and controller<a class="heading-anchor" aria-hidden tabindex="-1" href="#tensorboard-web-application-and-controller">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/tensorboards</span></span></code></pre>
+<h3 id="trainer-training-operator-v2">Trainer (training operator v2)<a class="heading-anchor" aria-hidden tabindex="-1" href="#trainer-training-operator-v2">#</a></h3>
+<blockquote>
+<p>⚠️ <strong>前提</strong>：必须先完成上文 <a href="#trainer-%E7%BB%84%E4%BB%B6-vendor-jobset-v0101">Trainer 组件 vendor (jobset v0.10.1)</a> 章节，否则 <code>kustomize build</code> 会因 GitHub 网络拉取失败而中断。</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/trainer/crds</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> condition=established</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crd/trainjobs.trainer.kubeflow.org</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=60s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/trainer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/trainer/runtimes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># kubeflow-trainer-roles.yaml 是纯 ClusterRole（RBAC），不参与调度，</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 不需要走 my-kubeflow wrapper 注入 toleration；</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 且 kustomize 安全策略禁止 wrapper 引用上级目录的单个 yaml 文件，</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 所以直接 apply 单文件（和 metacontroller CRD 做法一致）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> applications/trainer/upstream/overlays/kubeflow-platform/kubeflow-trainer-roles.yaml</span></span></code></pre>
+<ul>
+<li>故障处理： 可能会由于网络连接问题，加载配置失败, 多重试几次即可</li>
+</ul>
+<h3 id="spark-operator">Spark Operator<a class="heading-anchor" aria-hidden tabindex="-1" href="#spark-operator">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force-conflicts</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/spark-operator</span></span></code></pre>
+<h3 id="user-namespaces用户-profile">User Namespaces（用户 Profile）<a class="heading-anchor" aria-hidden tabindex="-1" href="#user-namespaces用户-profile">#</a></h3>
+<p>用户管理采用 git 化的目录结构，详见 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/kubeflow/community-distribution/community-distribution-26.03/my-kubeflow/profiles/README.md">my-kubeflow/profiles/README.md</a>。</p>
+<p><strong>首次部署</strong>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. dex 用户已在 my-kubeflow/dex/dex-config-patch.yaml 配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/dex</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 创建所有 profile namespace</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/profiles</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> profile</span></span></code></pre>
+<p><strong>后续增删用户</strong>按 <a href="https://github.com/wutz/k8s-in-action/blob/main/ai/kubeflow/community-distribution/community-distribution-26.03/my-kubeflow/profiles/README.md">my-kubeflow/profiles/README.md</a> 流程操作。</p>
+<blockquote>
+<p>upstream 的 <code>tests/kubeflow_profile_install.sh</code> 仅作 CI 验证用，<strong>生产请用 <code>my-kubeflow/profiles/</code> wrapper</strong>。</p>
+</blockquote>
+<p>🎉 至此以上所有组件安装完成！</p>
+<h3 id="验证所有控制面-pod-是否落在-infra-节点">验证：所有控制面 Pod 是否落在 infra 节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证所有控制面-pod-是否落在-infra-节点">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -A</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> custom-columns=</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">NAMESPACE:.metadata.namespace,</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">POD:.metadata.name,</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">NODE:.spec.nodeName,</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">STATUS:.status.phase </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">  |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -E</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "^(NAMESPACE|kubeflow|istio-system|auth|cert-manager|oauth2-proxy|knative)"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">  |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> column</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -t</span></span></code></pre>
+<p>预期所有 Pod 的 NODE 列都是 <code>ai-modeltrain-prod-kworker-01/02/03-cpu</code>（DaemonSet 派生 Pod 会在所有节点出现，属正常）。</p>
+<h2 id="connect-to-your-kubeflow-cluster">Connect to Your Kubeflow Cluster<a class="heading-anchor" aria-hidden tabindex="-1" href="#connect-to-your-kubeflow-cluster">#</a></h2>
+<h3 id="检查所有-pod-是否正常运行">检查所有 pod 是否正常运行<a class="heading-anchor" aria-hidden tabindex="-1" href="#检查所有-pod-是否正常运行">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cert-manager</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> oauth2-proxy</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> knative-serving</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow-user-example-com</span></span></code></pre>
+<h3 id="访问-ui">访问 UI<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问-ui">#</a></h3>
+<p>部署完成后，<code>istio-ingressgateway</code> 已通过 MetalLB 分配 LoadBalancer VIP（<code>10.81.215.101</code>）。</p>
+<p><strong>1. 确认 VIP 已分配</strong></p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-ingressgateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># EXTERNAL-IP 列应为 10.81.215.101</span></span></code></pre>
+<p><strong>2. 浏览器访问</strong></p>
+<ul>
+<li>URL: <a href="https://staii.seres.cn">https://staii.seres.cn</a></li>
+<li>账号密码：见 my-kubeflow/dex/dex-config-patch.yaml 的 staticPasswords（<a href="mailto:user01@example.com">user01@example.com</a>）</li>
+</ul>
+<p><strong>临时调试方案：port-forward</strong>（仅 master 本机调试 / MetalLB 故障时备用）</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># --address 0.0.0.0 让其他机器可通过 master 节点 IP 访问；</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 默认 127.0.0.1 只能在 master 本机访问。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 生产请走上面的 LoadBalancer VIP，port-forward 仅作临时调试。</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> port-forward</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> svc/istio-ingressgateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --address</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0.0.0.0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 8080:80</span></span></code></pre>
+<ul>
+<li>master 本机：<a href="http://localhost:8080">http://localhost:8080</a></li>
+<li>同网段机器：http://&#x3C;master-node-ip>:8080</li>
+</ul>
+<blockquote>
+<p>⚠️ <code>--address 0.0.0.0</code> 监听所有网卡，仅在受信网络使用，否则改回默认 <code>127.0.0.1</code> + SSH 隧道：<code>ssh -L 8080:localhost:8080 &#x3C;user>@&#x3C;master></code>。</p>
+</blockquote>
+<h3 id="配置-dex-账号">配置 dex 账号<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置-dex-账号">#</a></h3>
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/kubeflow/community-distribution/community-distribution-26.03/my-kubeflow/dex/README.md">配置 dex 账号</a></li>
+</ul>

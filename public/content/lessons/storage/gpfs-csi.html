@@ -1,0 +1,183 @@
+<h1 id="gpfs-csi-driver部署说明">GPFS CSI Driver部署说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpfs-csi-driver部署说明">#</a></h1>
+<h2 id="1-前置条件">1 前置条件<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-前置条件">#</a></h2>
+<p>假设本次部署的GPFS服务端有10个节点，分别是172.18.3.[193-202]</p>
+<p>假设本次部署GPFS GUI服务的节点2个，分别是172.18.3.[203-204]</p>
+<h3 id="11-部署方案">1.1 部署方案<a class="heading-anchor" aria-hidden tabindex="-1" href="#11-部署方案">#</a></h3>
+<p>部署GPFS CSI Driver前，需要先部署GPFS存储集群，并且需要同时部署好GUI服务。</p>
+<p>通常GPFS服务端和客户端的部署方式分为两种：</p>
+<ol>
+<li>所有客户端加入到服务端集群。</li>
+<li>服务端集群和客户端集群分开部署。</li>
+</ol>
+<p>第一种【所有客户端加入到服务端集群】部署方式比较简单，要求：</p>
+<ol>
+<li>所有客户端节点加入到GPFS服务端集群。</li>
+<li>统一配置集群内所有节点的/etc/hosts文件，所有节点保持一致。</li>
+<li>所有客户端节点要求与服务端仲裁节点免密。</li>
+<li>用一套GUI服务。</li>
+</ol>
+<p>第二种【服务端集群和客户端集群分开部署】部署方式要求：</p>
+<ol>
+<li>服务端集群和客户端集群分别部署。</li>
+<li>服务端集群和客户端集群分别配置/etc/hosts文件，保持一致。</li>
+<li>客户端集群有自己独立的仲裁节点。</li>
+<li>服务端集群仲裁节点和客户端集群仲裁节点配置免密登录。</li>
+<li>客户端仲裁节点要和其他客户端节点免密。</li>
+<li>服务端集群有自己独立的GUI服务。</li>
+<li>客户端集群有自己独立的GUI服务。</li>
+</ol>
+<p><strong>本环境使用的是第一种部署方式</strong></p>
+<h3 id="12-部署前置要求">1.2 部署前置要求<a class="heading-anchor" aria-hidden tabindex="-1" href="#12-部署前置要求">#</a></h3>
+<p>部署GPFS CSI Driver前，需要先部署GPFS存储集群，并且需要同时部署好GUI服务。</p>
+<p>所有客户端节点需要挂载好GPFS文件系统。本环境客户端挂载点为 /mnt/gpfs1</p>
+<h2 id="2-部署gpfs-csi-driver">2 部署GPFS CSI Driver<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-部署gpfs-csi-driver">#</a></h2>
+<h3 id="21-配置gpfs集群">2.1 配置GPFS集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#21-配置gpfs集群">#</a></h3>
+<p>以下步骤在GUI服务节点172.18.3.203上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 GUI 用户</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/lsuser</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 GUI 用户组</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/lsusergrp</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 CsiAdmin 用户组(默认已经存在)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/mkusergrp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> CsiAdmin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --role</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csiadmin</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 csiuser 用户，使其归属于 CsiAdmin 用户组</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 该用户会用于 SCI 驱动程序</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/mkuser</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csiuser</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csipassword</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -g</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> CsiAdmin</span></span></code></pre>
+<p>以下服务在GPFS第一个仲裁节点172.18.3.193上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置配额</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> defaultfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -Q</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证文件系统配置</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 确保 perfileset-quota 参数值为 no</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmlsfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> defaultfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --filesetdf</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -Q</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --perfileset-quota</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 对于 Red Hat OpenShift 的特定参数</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> controlSetxattrImmutableSELinux=yes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置在容器中显示正确的卷大小</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> defaultfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --filesetdf</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启用自动 inode 扩展</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 该功能仅限于 IBM Storage Scale 5.1.4 及以上的版本</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启用此设置后，文件集上指定的 inode-limit 设置将被忽略</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> defaultfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --auto-inode-limit</span></span></code></pre>
+<p>启用对 root 用户施加 fileset quota 限制，只需在访问集群（accessing cluster）上执行。本环境客户端与服务端为同一集群，直接在客户端挂载节点上执行即可：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enforceFilesetQuotaOnRoot=yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span></span></code></pre>
+<blockquote>
+<p>如果在开启 <code>enforceFilesetQuotaOnRoot</code> 之前已经写入过数据，需要在拥有集群（owning cluster）上执行 <code>mmcheckquota defaultfs</code> 重新核算配额用量，否则已有用量统计不准，可能出现无法写入的情况。</p>
+</blockquote>
+<p>以下步骤在GUI服务节点172.18.3.203上执行</p>
+<p>验证gui服务可用性</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试网络通信是否正常</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 以下用户名密码为 GUI 的登录用户名和密码</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --insecure</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'csiuser:csipassword'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -X</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> GET</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://127.0.0.1:443/scalemgmt/v2/cluster</span></span></code></pre>
+<p>执行后通常会正常返回信息：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "cluster"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "clusterSummary"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "clusterId"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">12883004940135644857</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "clusterName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfscluster.node01"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "primaryServer"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"node01"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "rcpPath"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"/usr/bin/scp"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "rcpSudoWrapper"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "repositoryType"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"CCR"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "rshPath"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"/usr/bin/ssh"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "rshSudoWrapper"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "uidDomain"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfscluster.node01"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "capacityLicensing"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-light-font-style:italic;--shiki-dark:#FFFFFF;--shiki-dark-font-style:inherit">      ...</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span></span></code></pre>
+<h3 id="22-配置kubernetes集群">2.2 配置Kubernetes集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#22-配置kubernetes集群">#</a></h3>
+<p>执行前确认GPFS已挂载到Kubernetes集群的所有节点上，本环境是/mnt/gpfs1。</p>
+<p>以下步骤在Kubernetes上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建命名空间</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ns</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs-csi</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 为所有Kubernetes节点增加标签</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 本环境需要为mn、gn节点增加标签</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mn01.zw1.local</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --overwrite=true</span></span></code></pre>
+<p>以下步骤在GPFS GUI服务节点172.18.3.203上执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取GUI服务抓取到的客户端列表信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --insecure</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'csiuser:csipassword'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -X</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> GET</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://127.0.0.1:443/scalemgmt/v2/nodes</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "nodes"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : [ {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs13"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs14"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs15"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs16"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs17"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs18"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs19"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs20"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs21"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }, {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gpfs22"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  } ],</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "status"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "code"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">200</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "message"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"The request finished successfully."</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取指定客户端的信息。以gn065为例。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 注意如果节点状态不为HEALTHY，需要先修复节点状态。否则CSI日志会有相关报错。</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --insecure</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'csiuser:admin'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -X</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> GET</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://127.0.0.1:443/scalemgmt/v2/nodes/gn065</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "nodes"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : [ {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "nodeNumber"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">77</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "adminNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gn065"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "config"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "adminLoginName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"root"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "designatedLicense"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"client"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "requiredLicense"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"client"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "productEdition"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">""</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "status"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "gpfsState"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"HEALTHY"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "nodeState"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"HEALTHY"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "osName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"Ubuntu 22.04.4 LTS"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "productVersion"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"5.2.3.2"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "network"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "adminIPAddress"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"172.18.3.27"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "daemonIPAddress"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"172.18.3.27"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "daemonNodeName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gn065"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "osHostName"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"gn065.hs1.local"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    },</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "roles"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "cesNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "cloudGatewayNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "cnfsNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "designation"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"client"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "gatewayNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "managerNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "quorumNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">      "snmpNode"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  } ],</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">  "status"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : {</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "code"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">200</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#E06C75">    "message"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"The request finished successfully."</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span></span></code></pre>
+<p>修改csiscaleoperators.csi.ibm.com_cr.yaml文件，重点修改nodeMapping值。</p>
+<p><strong>如果GPFS服务端的主机名和Kubernetes的主机名一致，不用调整nodeMapping值</strong></p>
+<p>安装GPFS CSI Driver</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装GPFS CSI Driver</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./</span></span></code></pre>
+<p>测试GPFS CSI Driver</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试GPFS CSI Driver</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./pvc.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./pod.yaml</span></span></code></pre>

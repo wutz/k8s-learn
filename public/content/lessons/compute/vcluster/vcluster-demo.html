@@ -1,0 +1,27 @@
+<h1 id="部署-vcluster-demo-集群">部署 vcluster-demo 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-vcluster-demo-集群">#</a></h1>
+<h2 id="集群信息">集群信息<a class="heading-anchor" aria-hidden tabindex="-1" href="#集群信息">#</a></h2>
+<ul>
+<li>集群名称：vcluster-demo</li>
+<li>loadBalancerIP: 192.168.3.150</li>
+<li>节点使用方式：独占节点</li>
+<li>计算节点：
+<ul>
+<li>cn-192-168-3-50</li>
+<li>cn-192-168-3-51</li>
+</ul>
+</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="配置计算节点">配置计算节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置计算节点">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfd.yaml</span></span></code></pre>
+<h2 id="获取-kubeconfig-需要等待-1-分钟左右初始化">获取 kubeconfig （需要等待 1 分钟左右初始化）<a class="heading-anchor" aria-hidden tabindex="-1" href="#获取-kubeconfig-需要等待-1-分钟左右初始化">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secrets</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vc-vcluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --template=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{{.data.config}} | base64 -D</span></span></code></pre>
+<h2 id="查看资源限制">查看资源限制<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看资源限制">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> limitrange</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span></span></code></pre>
+<h2 id="查看资源限制详情">查看资源限制详情<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看资源限制详情">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> describe</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> limitrange</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vc-vcluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span></span></code></pre>
+<h2 id="查看资源配额">查看资源配额<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看资源配额">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> resourceQuota</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  </span></span></code></pre>
+<h2 id="查看-vcluster-配置">查看 vcluster 配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看-vcluster-配置">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> values</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-demo</span></span></code></pre>

@@ -1,0 +1,82 @@
+<h1 id="rook-日常维护">Rook 日常维护<a class="heading-anchor" aria-hidden tabindex="-1" href="#rook-日常维护">#</a></h1>
+<h2 id="节点与-osd-管理">节点与 OSD 管理<a class="heading-anchor" aria-hidden tabindex="-1" href="#节点与-osd-管理">#</a></h2>
+<ul>
+<li>
+<p>新增节点按照 k8s 新增节点操作即可，如果新节点有空盘则可以自动加入集群</p>
+</li>
+<li>
+<p>新增 OSD 插入空盘会自动加入集群</p>
+<p>在集群初始化或者新增OSD的过程中，如果遇到无法添加OSD并且在rook-ceph-osd-prepare出现类似如下提示信息：</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span>cephosd: skipping osd.0: "0c5f13e9-5cd3-4076-b35a-512433821949" belonging to a different ceph cluster "22e2d8b8-3c19-47fa-ac47-af67f0e6cfb2"</span></span></code></pre>
+<p>可以先参考README.md中的抹除磁盘部分进行操作，如果抹除后仍然不行可以修改cluster/cluster.yaml文件，新增cleanupPolicy.wipeDevicesFromOtherClusters=true配置
+参考文档：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">https://rook.io/docs/rook/latest-release/Getting-Started/ceph-teardown/?h=wipe#zapping-devices</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">https://rook.io/docs/rook/latest-release/CRDs/specification/?h=wipe#ceph.rook.io/v1.CleanupPolicySpec</span></span></code></pre>
+<ul>
+<li>移除节点和 OSD</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 立即排干节点上的 pod </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> drain</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --ignore-daemonsets</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --delete-emptydir-data</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果需要撤销 drain 节点，则执行 uncordon 命令</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#kubectl uncordon sn-10-254-41-1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-1</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 OSD 列表, 找到移除节点下的 osd ids</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tree</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># operator缩为0，防止在维护过程中被operator重新加入到集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-operator</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 将osd对应的deployment置为0，</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-osd-1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-osd-2</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-osd-3</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入到toolbox环境将osd状态置为down</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">toolbox</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">> </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd.1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">toolbox</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">> </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd.2</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">toolbox</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">> </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd.3</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除 OSD, osd 必须处于 down 状态才允许移除</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> purge-osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 1,2,3</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 【可选】如果创建集群时指定了useAllDevices=false，并且单独指定了storage的devices信息，需要将对应的节点和磁盘信息删除</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> edit</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cephcluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 回复operator</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-operator</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=2</span></span></code></pre>
+<ul>
+<li>
+<p>更换故障 OSD 磁盘</p>
+<p>参考地址： <a href="https://rook.io/docs/rook/latest-release/Storage-Configuration/Advanced/ceph-osd-mgmt/?h=osd#remove-an-osd">https://rook.io/docs/rook/latest-release/Storage-Configuration/Advanced/ceph-osd-mgmt/?h=osd#remove-an-osd</a></p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 OSD 列表, 找到移除节点下的 osd ids</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tree</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># operator缩为0，防止在维护过程中被operator重新加入到集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-operator</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 将osd对应的deployment置为0，</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-osd-1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 OSD 列表, 找到故障 OSD 的 id</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tree</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入到toolbox环境将osd状态置为down</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">toolbox</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">> </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd.1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 更换故障 OSD 磁盘</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> purge-osd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 新增空盘自动加入集群，如果在cephcluster指定了设备，设备名称变更的话需要重新指定设备</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 恢复operator的副本数</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rook-ceph-operator</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=2</span></span></code></pre>
+<ul>
+<li>节点离线缺省 <code>30m</code> 后开始 recovery 自动恢复满足数据冗余数量</li>
+</ul>

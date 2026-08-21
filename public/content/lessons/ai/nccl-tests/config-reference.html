@@ -1,0 +1,539 @@
+<h1 id="配置参考">配置参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置参考">#</a></h1>
+<p>基于当前 5 个 YAML 的实际配置编写。参数说明见各章节表格。</p>
+<h2 id="nccl-环境变量">NCCL 环境变量<a class="heading-anchor" aria-hidden tabindex="-1" href="#nccl-环境变量">#</a></h2>
+<h3 id="通用参数所有机型一致">通用参数（所有机型一致）<a class="heading-anchor" aria-hidden tabindex="-1" href="#通用参数所有机型一致">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NCCL_ALGO</code></td>
+<td><code>Ring</code></td>
+<td>固定 Ring 算法，确保结果可比</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_DISABLE</code></td>
+<td><code>0</code></td>
+<td>启用 IB/RoCE，禁用则回退 TCP 带宽暴跌</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_QPS_PER_CONNECTION</code></td>
+<td><code>8</code></td>
+<td>每连接 8 个 QP，提升带宽利用率</td>
+</tr>
+<tr>
+<td><code>NCCL_DEBUG</code></td>
+<td><code>WARN</code></td>
+<td>仅输出警告，避免 INFO 日志过大触发轮转</td>
+</tr>
+</tbody>
+</table>
+<h3 id="按机型差异参数">按机型差异参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#按机型差异参数">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>5090 (hostnet)</th>
+<th>5090 (macvlan)</th>
+<th>B200</th>
+<th>B300</th>
+<th>A100 (macvlan)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>UCX_NET_DEVICES</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>bond1</code></td>
+<td><code>bond1</code></td>
+<td><code>eth0</code></td>
+</tr>
+<tr>
+<td><code>NCCL_SOCKET_IFNAME</code></td>
+<td><code>bond0</code></td>
+<td><code>eth0</code></td>
+<td><code>bond1</code></td>
+<td><code>bond1</code></td>
+<td><code>eth0</code></td>
+</tr>
+<tr>
+<td><code>NCCL_IB_HCA</code></td>
+<td><code>mlx5</code></td>
+<td><code>mlx5</code></td>
+<td><code>mlx5</code></td>
+<td><code>roce_vf_rail</code></td>
+<td><code>^=mlx5_4</code></td>
+</tr>
+<tr>
+<td><code>NCCL_IB_TC</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>106</code></td>
+<td><code>106</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>NCCL_CROSS_NIC</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>1</code></td>
+<td><code>1</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>NCCL_DEBUG_SUBSYS</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><code>INIT,NET,GRAPH</code></td>
+</tr>
+</tbody>
+</table>
+<p>参数说明：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>选错后果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>UCX_NET_DEVICES</code></td>
+<td>UCX 选错网卡，hcoll 初始化失败或走错路径</td>
+</tr>
+<tr>
+<td><code>NCCL_SOCKET_IFNAME</code></td>
+<td>节点间 TCP 控制通道不通，无法连接</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_HCA</code></td>
+<td>走错网卡或不走 RDMA，结果失真</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_TC</code></td>
+<td>不设则 RoCE 流量无优先级标记，可能被拥塞丢弃</td>
+</tr>
+<tr>
+<td><code>NCCL_CROSS_NIC</code></td>
+<td>多网卡环境下不启用跨卡聚合，带宽利用率低</td>
+</tr>
+<tr>
+<td><code>NCCL_DEBUG_SUBSYS</code></td>
+<td>仅调试用，不影响功能</td>
+</tr>
+</tbody>
+</table>
+<h3 id="b300-独有参数">B300 独有参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#b300-独有参数">#</a></h3>
+<p>B300 使用 Spectrum-X 插件 + VF rail 模式，额外配置：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NCCL_NET_PLUGIN</code></td>
+<td><code>spcx</code></td>
+<td>使用 Spectrum-X 网络插件</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_ADAPTIVE_ROUTING</code></td>
+<td><code>1</code></td>
+<td>启用自适应路由</td>
+</tr>
+<tr>
+<td><code>NCCL_NCHANNELS_PER_NET_PEER</code></td>
+<td><code>4</code></td>
+<td>每 peer 4 个 channel</td>
+</tr>
+<tr>
+<td><code>NCCL_P2P_NET_CHUNKSIZE</code></td>
+<td><code>262144</code></td>
+<td>P2P 网络传输块大小（256KB）</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_PORT_SPEED</code></td>
+<td><code>800000</code></td>
+<td>端口速率 800Gbps</td>
+</tr>
+<tr>
+<td><code>NCCL_MIN_NCHANNELS</code></td>
+<td><code>32</code></td>
+<td>最少 32 个 channel</td>
+</tr>
+</tbody>
+</table>
+<h3 id="注释参数按需启用">注释参数（按需启用）<a class="heading-anchor" aria-hidden tabindex="-1" href="#注释参数按需启用">#</a></h3>
+<p>所有 YAML 都注释了以下参数，需要时取消注释：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>注释值</th>
+<th>启用条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NCCL_IB_GID_INDEX</code></td>
+<td><code>3</code></td>
+<td>RDMA GID 索引，用 <code>show_gids</code> 确认后启用</td>
+</tr>
+<tr>
+<td><code>coll_hcoll_enable</code></td>
+<td><code>0</code></td>
+<td>hcoll 与 NCCL 冲突时禁用，见下方 mpirun 说明</td>
+</tr>
+</tbody>
+</table>
+<h2 id="mpirun-参数">mpirun 参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#mpirun-参数">#</a></h2>
+<h3 id="通用参数">通用参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#通用参数">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-np</code></td>
+<td><code>16</code></td>
+<td>总 rank 数 = 节点数 × 8</td>
+</tr>
+<tr>
+<td><code>-bind-to</code></td>
+<td><code>none</code></td>
+<td>禁用 CPU 绑定，避免干扰 NCCL 线程调度</td>
+</tr>
+<tr>
+<td><code>-x LD_LIBRARY_PATH</code></td>
+<td>—</td>
+<td>传递库路径到所有 rank</td>
+</tr>
+</tbody>
+</table>
+<h3 id="按机型差异">按机型差异<a class="heading-anchor" aria-hidden tabindex="-1" href="#按机型差异">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>5090</th>
+<th>5090-macvlan</th>
+<th>B200</th>
+<th>B300</th>
+<th>A100</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-x UCX_NET_DEVICES</code></td>
+<td>—</td>
+<td>—</td>
+<td><code>bond1</code></td>
+<td><code>bond1</code></td>
+<td><code>eth0</code></td>
+</tr>
+<tr>
+<td><code>-x OMPI_MCA_coll_hcoll_verbose</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td><code>100</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="hcoll-禁用说明">hcoll 禁用说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#hcoll-禁用说明">#</a></h3>
+<p>nccl-tests 中 MPI 仅作进程启动器，集合通信走 NCCL，不经过 hcoll。如遇 hcoll 初始化冲突，禁用即可：</p>
+<ul>
+<li>5090 系列：取消注释 <code>-mca coll_hcoll_enable 0</code></li>
+<li>B200/B300：取消注释 <code>-x OMPI_MCA_coll_hcoll_enable=0</code></li>
+</ul>
+<h2 id="all_reduce_perf-参数">all_reduce_perf 参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#all_reduce_perf-参数">#</a></h2>
+<h3 id="当前配置">当前配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#当前配置">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th align="right">5090</th>
+<th align="right">5090-macvlan</th>
+<th align="right">B200</th>
+<th align="right">B300</th>
+<th align="right">A100</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-b</code></td>
+<td align="right">8</td>
+<td align="right">8</td>
+<td align="right">8</td>
+<td align="right">8</td>
+<td align="right">8</td>
+<td>起始数据量</td>
+</tr>
+<tr>
+<td><code>-e</code></td>
+<td align="right">8G</td>
+<td align="right">8G</td>
+<td align="right">16G</td>
+<td align="right">64G</td>
+<td align="right">8G</td>
+<td>结束数据量</td>
+</tr>
+<tr>
+<td><code>-f</code></td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td align="right">2</td>
+<td>乘数步长（每次翻倍）</td>
+</tr>
+<tr>
+<td><code>-g</code></td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td>每 rank 1 GPU</td>
+</tr>
+</tbody>
+</table>
+<p>未显式指定时使用 nccl-tests 默认值：<code>-n 20</code>（迭代次数）、<code>-w 1</code>（预热）、<code>-c 1</code>（正确性校验）。</p>
+<h3 id="单次测试-vs-压力测试">单次测试 vs 压力测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#单次测试-vs-压力测试">#</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>单次测试</th>
+<th>压力测试</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>命令</td>
+<td><code>-b 8 -e 8G -f 2 -g 1</code></td>
+<td><code>-b 8G -e 8G -i 0 -g 1</code></td>
+</tr>
+<tr>
+<td>数据量</td>
+<td>8B→8G 翻倍扫描</td>
+<td>固定 8G 不变</td>
+</tr>
+<tr>
+<td>行为</td>
+<td>扫描完自动退出</td>
+<td>持续循环，手动停止</td>
+</tr>
+<tr>
+<td>目的</td>
+<td>性能曲线 + 正确性</td>
+<td>满载带宽长稳</td>
+</tr>
+</tbody>
+</table>
+<p>压力测试中 <code>-i 0</code>（stepbytes=0）使数据量不递增，配合 <code>-b 8G -e 8G</code>（min=max）程序持续循环输出 8G 行，直到 <code>kubectl delete</code> 停止。</p>
+<h2 id="yaml-结构配置">YAML 结构配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#yaml-结构配置">#</a></h2>
+<h3 id="通用配置所有机型一致">通用配置（所有机型一致）<a class="heading-anchor" aria-hidden tabindex="-1" href="#通用配置所有机型一致">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numNodes</code></td>
+<td>2</td>
+<td>节点数</td>
+</tr>
+<tr>
+<td><code>numProcPerNode</code></td>
+<td>8</td>
+<td>每节点 GPU 数</td>
+</tr>
+<tr>
+<td><code>runLauncherAsNode</code></td>
+<td>false</td>
+<td>launcher 不占用 GPU</td>
+</tr>
+<tr>
+<td><code>sshAuthMountPath</code></td>
+<td><code>/home/mpiuser/.ssh</code></td>
+<td>SSH 认证路径</td>
+</tr>
+<tr>
+<td><code>successPolicy</code></td>
+<td>All / launcher</td>
+<td>launcher 成功即判定成功</td>
+</tr>
+<tr>
+<td><code>replicas</code>（launcher）</td>
+<td>1</td>
+<td>单 launcher</td>
+</tr>
+<tr>
+<td><code>replicas</code>（node）</td>
+<td>1</td>
+<td>Trainer webhook 硬约束，多节点由 numNodes 展开</td>
+</tr>
+<tr>
+<td><code>nvidia.com/gpu</code></td>
+<td>8</td>
+<td>每节点 8 GPU</td>
+</tr>
+<tr>
+<td><code>rdma/hca</code></td>
+<td>1</td>
+<td>RDMA 设备</td>
+</tr>
+<tr>
+<td><code>readinessProbe</code></td>
+<td>tcpSocket:2222</td>
+<td>sshd 就绪检测</td>
+</tr>
+<tr>
+<td><code>dshm</code></td>
+<td>emptyDir: Memory</td>
+<td>NCCL 进程间共享内存</td>
+</tr>
+<tr>
+<td><code>tolerations</code></td>
+<td>Exists / NoSchedule</td>
+<td>调度到 GPU 节点</td>
+</tr>
+<tr>
+<td><code>securityContext</code></td>
+<td>runAsUser: 1000, IPC_LOCK</td>
+<td>非 root 运行 + 锁内存</td>
+</tr>
+</tbody>
+</table>
+<h3 id="按机型差异-1">按机型差异<a class="heading-anchor" aria-hidden tabindex="-1" href="#按机型差异-1">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>5090 (hostnet)</th>
+<th>5090 (macvlan)</th>
+<th>B200</th>
+<th>B300</th>
+<th>A100 (macvlan)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hostNetwork</code></td>
+<td>true</td>
+<td>—</td>
+<td>true</td>
+<td>true</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>nodeSelector</code></td>
+<td>—</td>
+<td>—</td>
+<td>B200</td>
+<td>B300</td>
+<td>—</td>
+</tr>
+<tr>
+<td>macvlan annotation</td>
+<td>—</td>
+<td><code>network-operator/hca</code></td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>镜像</td>
+<td>nccl2.27.6</td>
+<td>nccl2.27.6</td>
+<td>nccl2.29.2</td>
+<td>nccl2.29.2</td>
+<td>nccl2.29.2</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>hostNetwork: true 用于 RoCE hostnet 模式，使宿主机网卡进入 Pod netns。macvlan 模式不需要。</p>
+</blockquote>
+<h2 id="集群规模适配">集群规模适配<a class="heading-anchor" aria-hidden tabindex="-1" href="#集群规模适配">#</a></h2>
+<p>当前 YAML 默认 2 节点 16 GPU。扩展节点数修改两处：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>位置</th>
+<th align="right">默认值</th>
+<th align="right">N 节点改为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numNodes</code></td>
+<td>mlPolicy</td>
+<td align="right">2</td>
+<td align="right">N</td>
+</tr>
+<tr>
+<td><code>-np</code></td>
+<td>mpirun</td>
+<td align="right">16</td>
+<td align="right">N × 8</td>
+</tr>
+</tbody>
+</table>
+<p>以 4 节点为例：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sed</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -e</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/numNodes: 2/numNodes: 4/'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    -e</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/-np 16/-np 32/'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    nccl-tests-5090.yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-4node.yaml</span></span></code></pre>
+<h2 id="性能基准">性能基准<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能基准">#</a></h2>
+<p>理论峰值 busbw 计算公式：</p>
+<pre><code>理论峰值 = 网卡数 × 单口带宽 ÷ 8
+</code></pre>
+<p>busbw 校正因子（all_reduce）：<code>2(n-1)/n</code>，n 为 GPU 总数。此因子使 busbw 可与硬件峰值直接比较，与 rank 数量无关。</p>
+<table>
+<thead>
+<tr>
+<th>评级</th>
+<th align="right">busbw / 理论峰值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>优秀</td>
+<td align="right">≥ 90%</td>
+</tr>
+<tr>
+<td>可接受</td>
+<td align="right">80–90%</td>
+</tr>
+<tr>
+<td>异常</td>
+<td align="right">&#x3C; 80%</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>具体理论峰值因集群网卡配置而异，由工程师根据硬件规格计算。</p>
+</blockquote>

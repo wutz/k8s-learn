@@ -1,0 +1,88 @@
+<h1 id="通常修改的配置">通常修改的配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#通常修改的配置">#</a></h1>
+<ul>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/inventory.ini">inventory/mycluster/inventory.ini</a></p>
+<ul>
+<li><strong>修改</strong> <code>kube_control_plane</code> 节点，HA 至少 3 个且为奇数，非 HA 1 个</li>
+<li><strong>修改</strong> <code>kube_node</code> 节点, 按需添加</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/all/all.yml">inventory/mycluster/group_vars/all/all.yml</a></p>
+<ul>
+<li><strong>修改</strong> <code>upstream_dns_servers</code>: 如果节点无法访问外网 DNS，需要设置内网可访问的 dns 服务器, 否则 coredns 和 nodelocaldns 会无法启动</li>
+<li><strong>修改</strong> <code>http_proxy</code> 和 <code>https_proxy</code>: 如果节点无法访问外网（如 H100/B200 等环境），需要设置代理地址，否则无法拉取镜像</li>
+<li><strong>修改</strong> <code>ntp_servers</code>: 如果节点无法访问外网 NTP 服务器，需要设置内网可访问的 NTP 服务器，否则时间会严重漂移导致证书等问题</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/all/etcd.yml">inventory/mycluster/group_vars/all/etcd.yml</a></p>
+<ul>
+<li>设置 <code>etcd_quota_backend_bytes: "8589934592"</code> 增加 etcd 存储空间</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/all/containerd.yml">inventory/mycluster/group_vars/all/containerd.yml</a></p>
+<ul>
+<li>设置 <code>containerd_discard_unpacked_layers: false</code> 被 Spegel (镜像 P2P 服务) 依赖</li>
+<li>设置 <code>containerd_registries_mirrors</code> 常用公共镜像仓库镜像
+<ul>
+<li><em>可选</em> 添加 http 协议的仓库地址，常用于私有仓库</li>
+</ul>
+</li>
+<li><em>可选</em> 部署 kubevirt 使用块存储时必须设置 <code>containerd_extra_runtime_args</code> 启用 <code>device_ownership_from_security_context: true</code></li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/all/offline.yml">inventory/mycluster/group_vars/all/offline.yml</a></p>
+<ul>
+<li>设置 <code>registry_host: "mir.blsc.cn"</code> 为指定镜像仓库地址</li>
+<li>设置 <code>files_repo: "https://file.mir.blsc.cn/kubespray/2.28.0"</code> 为指定镜像仓库地址</li>
+<li>解开注释与 <code>registry_host</code> 和 <code>files_repo</code> 相关的配置</li>
+<li>与 <code>registry_host</code> 相关的配置还需要添加源地址作为后缀</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml">inventory/mycluster/group_vars/k8s_cluster/k8s-cluster.yml</a></p>
+<ul>
+<li><strong>修改</strong> <code>kube_service_addresses: x.x.x.x/x</code>: 需要询问用户</li>
+<li>设置 <code>local_release_dir: "/root/.cache/kubespray"</code> 为指定缓存目录</li>
+<li>设置 <code>download_run_once: True</code> 打开第一个控制节点负责连接外网拉取依赖包和镜像</li>
+<li>设置 <code>kube_network_plugin: cni</code></li>
+<li>设置 <code>kube_owner: root</code> 被 cilium 依赖</li>
+<li>设置 <code>kube_proxy_strict_arp: true</code> 被 kube-vip 和 metallb 依赖</li>
+<li>设置 <code>auto_renew_certificates: true</code> 开启自动更新证书</li>
+<li>设置 <code>kubelet_config_extra_args: { runtimeRequestTimeout: 15m }</code> 用于拉取大镜像容易超时的问题</li>
+<li>设置 <code>kube_scheduler_profiles</code> 调度支持优先填充满一个 GPU 节点</li>
+<li><em>可选</em> <code>enable_dns_autoscaler: false</code> 关闭 coredns 自动扩缩容</li>
+<li><em>可选</em> <code>coredns_replicas: 3</code> 配置 coredns 副本数</li>
+<li><em>可选</em> <code>kubeadm_ignore_preflight_errors</code>: 如果 OS 是非标准发行版此项必须添加</li>
+<li><em>可选</em> <code>supplementary_addresses_in_ssl_keys</code> 用于 kube-apiserver 证书添加额外的 IP 或 DNS。 该配置在需要将K8S集群的API暴露到外网上时使用，请提前与网络工程师确认集群所在外网的出口IP，在配置网络白名单前提下将6443端口暴露到外网。</li>
+<li><em>可选</em> <code>dns_etchosts</code> 用于 coredns 和 nodelocaldns 添加额外的 DNS 记录</li>
+<li><em>可选</em> <code>nodelocaldns_external_zones</code> 用于指导域名后缀使用配置的 nameserver 完成解析</li>
+</ul>
+</li>
+<li>
+<p><a href="https://github.com/wutz/k8s-in-action/blob/main/k8s/kubespray/kubespray-2.29.0/inventory/mycluster/group_vars/k8s_cluster/addons.yml">inventory/mycluster/group_vars/k8s_cluster/addons.yml</a></p>
+<ul>
+<li>设置 kube-vip 作为 kube-apiserver 外部高可用负载均衡器 (内部负载均衡器由缺省 nginx 提供)
+<ul>
+<li><strong>修改</strong> <code>kube_vip_address</code> 用于 kube-apiserver 的 vip 地址，需要询问网络管理员</li>
+<li><strong>修改</strong> <code>kube_vip_interface</code> 宿主机上实际网卡名称。<strong>注意： 在配置了vlan的情况下，需要设置vlan的设备名。比如使用ip addr查看到vlan的设备名为bond0.3100@bond0，则这里需要填入bond0.3100</strong></li>
+<li>设置 <code>kube_vip_enabled: true</code> 开启 kube-vip</li>
+<li>设置 <code>kube_vip_arp_enabled: true</code> 开启 ARP 模式</li>
+<li>设置 <code>kube_vip_controlplane_enabled: true</code> 开启控制平面模式</li>
+</ul>
+</li>
+<li>设置 <code>metrics_server_enabled</code> 开启 metrics-server</li>
+</ul>
+</li>
+</ul>
+<h1 id="可选">可选<a class="heading-anchor" aria-hidden tabindex="-1" href="#可选">#</a></h1>
+<ul>
+<li>修改 <code>inventory/mycluster/group_vars/all/all.yml</code>
+<ul>
+<li>如果需要代理访问外部网络 (常见使用 H100/B200 等禁止访问外面的环境), 则设置 <code>http_proxy</code>, <code>https_proxy</code> 和 <code>no_proxy</code>，<code>no_proxy</code> 通常可配置为 <code>127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,localhost,*.&#x3C;code>.&#x3C;region>.paratera.com</code>, 其中 <code>*.&#x3C;code>.&#x3C;region>.paratera.com</code> 替换为真实场景下给用户使用的域名，例如 <code>*.dev1.bz1.paratera.com</code></li>
+</ul>
+</li>
+</ul>

@@ -1,0 +1,55 @@
+<h1 id="vcluster"><a href="https://github.com/loft-sh/vcluster">vCluster</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#vcluster">#</a></h1>
+<p>用于在 host k8s 上创建多个 virtual k8s 集群，以最大化利用资源</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>
+<p>vCluster 命名：格式 <code>vcluster-xxx</code>, 需要修改:</p>
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/helmwave.yml">helmwave.yaml</a> 的 <code>namespace</code></li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/values.yaml">values.yaml</a> 的 <code>exportKubeConfig.context</code></li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/nfd.yaml">nfd.yaml</a> 的 <code>metadata.name</code></li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/netpol-cp.yaml">netpol-cp.yaml</a> 的 <code>metadata.namespace</code></li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/netpol-work.yaml">netpol-work.yaml</a> 的 <code>metadata.namespace</code></li>
+</ul>
+</li>
+<li>
+<p>准备节点用于 vCluster</p>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/nfd.yaml">nfd.yaml</a>:</p>
+<ul>
+<li>多个 vCluster 共享节点, 只适合同一组织不同团队: 配置 <code>scclabs.dev/node-pool: share</code></li>
+<li>一个 vCluster 独占节点, 适合不同组织: 配置 <code>scclabs.dev/node-pool: vcluster-example</code></li>
+<li>最后配置节点池对应的 <code>nodename</code> 列表</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfd.yaml</span></span></code></pre>
+<ul>
+<li>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/vcluster/values.yaml">values.yaml</a></p>
+<ul>
+<li>选择节点池：设置 <code>sync.fromHost.nodes.selector.labels</code></li>
+<li>暴露 vCluster 服务
+<ul>
+<li>以 Service LoadBalancer 暴露 vCluster 服务, 解开注释 <code>controlPlane.service</code> 并配置 <code>annotations.metallb.universe.tf/loadBalancerIPs</code></li>
+<li>以 Ingress 暴露 vCluster 服务, 解开注释 <code>ingress</code> 并配置 <code>controlPlane.ingress.spec.host</code>
+最后配置 <code>exportKubeConfig.server</code> 对应的地址</li>
+</ul>
+</li>
+<li>配置网络策略: 根据实际情况修改需要让 vcluster 访问到 host k8s 相关服务, 配置 <code>policies.networkPolicy.extraWorkerRules</code></li>
+</ul>
+</li>
+<li>
+<p>部署</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<ul>
+<li>获取 kubeconfig （需要等待 1 分钟左右初始化）</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secrets</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vcluster-example</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vc-vcluster</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --template=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{{.data.config}} | base64 -D</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载 vCluster</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 移除 nfd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfd.yaml</span></span></code></pre>

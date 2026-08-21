@@ -1,0 +1,33 @@
+<h1 id="cilium">Cilium<a class="heading-anchor" aria-hidden tabindex="-1" href="#cilium">#</a></h1>
+<p><a href="https://github.com/cilium/cilium">Cilium</a> 是一个基于 eBPF 数据平面的网络、可观测性和安全解决方案。它提供了一个简单的扁平化三层网络，能够在原生路由或覆盖模式下跨越多个集群。它具有七层协议感知能力，并且可以使用基于身份的安全模型在三到七层上实施网络策略，该模型与网络寻址分离。</p>
+<p>主要提供 CNI，Service 和 Networking Policies 等功能。</p>
+<h2 id="注意">注意<a class="heading-anchor" aria-hidden tabindex="-1" href="#注意">#</a></h2>
+<ul>
+<li>cilium 会占用 route table <a href="https://github.com/cilium/cilium/pull/40248/files">200/202/2004/2005</a>, 如果宿主机有网络也使用这些路由表, 则需要修改宿主机网络配置, 否则会导致网络异常</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li><strong>修改</strong> <code>values.yml</code> 中的 <code>ipam.operator.clusterPoolIPv4PodCIDRList</code> 配置: 需要询问用户</li>
+<li><strong>修改</strong> <code>values.yml</code> 中的 <code>k8sServiceHost</code> 配置: API Server 直连地址，使 Cilium init 容器绕过 ClusterIP 避免 iptables 竞态
+<ul>
+<li>Kubespray 部署的集群推荐 <code>127.0.0.1</code>（节点本地 nginx 代理，天然 HA）</li>
+<li>也可使用 VIP 地址（如 <code>192.168.3.101</code>），但依赖外部负载均衡</li>
+<li>不推荐 <code>auto</code>（从 <code>kube-public/cluster-info</code> 读取，kubeadm 写入的是单 master IP，无 HA）</li>
+</ul>
+</li>
+<li><strong>修改</strong> <code>values.yml</code> 中的 <code>k8sServicePort</code> 配置: API Server 端口，默认 <code>6443</code></li>
+<li><strong>修改</strong> <code>values.yml</code> 中的 <code>bpf.enableTCX</code> 配置为 <code>false</code>, 避免触发bug，参见 <a href="https://github.com/cilium/cilium/issues/44194">TCX BPF programs not cleaned up</a></li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="高级配置">高级配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#高级配置">#</a></h2>
+<ul>
+<li>扩充 Pod CIDR 配置: 当前集群 Pod CIDR 已经用尽时，扩容节点启动 Pod 时会失败
+<ul>
+<li>不能修改原有的地址段，需要新增地址段</li>
+<li>在 <code>values.yml</code> 中的 <code>ipam.operator.clusterPoolIPv4PodCIDRList</code> 列表中添加新的地址段</li>
+<li>重启 cilium operator <code>kubectl rollout restart deployment/cilium-operator -n kube-system</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

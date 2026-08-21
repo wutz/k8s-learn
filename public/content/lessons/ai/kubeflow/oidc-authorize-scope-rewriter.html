@@ -1,0 +1,73 @@
+<h1 id="oidc-authorize-scope-rewriter">OIDC Authorize Scope Rewriter<a class="heading-anchor" aria-hidden tabindex="-1" href="#oidc-authorize-scope-rewriter">#</a></h1>
+<p>拦截 Dex 发往赛力斯 IAM 的 OIDC authorize 请求，把 <code>scope</code> 重写为单一 <code>openid</code>，绕过 IAM 对额外 scope 的拒绝（Dex v2.45 OIDC connector 强制 prepend <code>openid</code> 导致 scope 重复，方案 D：authorize 重写 adapter）。</p>
+<h2 id="工作原理">工作原理<a class="heading-anchor" aria-hidden tabindex="-1" href="#工作原理">#</a></h2>
+<pre><code>Dex（issuer 保持 IAM 真实值，仅覆盖 authorize 端点）
+  ↓ providerDiscoveryOverrides.authURL 指向 adapter
+浏览器 302 → /oidc-authorize-scope-rewriter/authorize?scope=openid+profile+email
+  ↓ nginx 改写 scope=openid
+302 → iam.seres.cn/idp/authCenter/authenticate?scope=openid
+IAM 登录 → 回调 → Dex（不经 adapter）
+Dex 直连 IAM token/jwks（不经 adapter）
+</code></pre>
+<p>只拦截 <code>/authorize</code> 一个端点，token/jwks/userinfo 走 IAM 真实地址。</p>
+<h2 id="前置依赖">前置依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置依赖">#</a></h2>
+<ul>
+<li>Istio + Kubeflow Istio Resources（VirtualService 绑定 <code>kubeflow/kubeflow-gateway</code>）</li>
+<li>oauth2-proxy（AuthorizationPolicy 已排除 <code>/oidc-authorize-scope-rewriter/*</code>，wrapper 内置）</li>
+<li>外部 DNS <code>staii.seres.cn</code> → VIP <code>10.81.215.101</code></li>
+</ul>
+<h2 id="文件清单">文件清单<a class="heading-anchor" aria-hidden tabindex="-1" href="#文件清单">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>configmap.yaml</code></td>
+<td>nginx 配置，提取 4 参数（client_id/redirect_uri/response_type/state）+ scope=openid</td>
+</tr>
+<tr>
+<td><code>deployment.yaml</code></td>
+<td><code>nginx:1.27-alpine</code>，unprivileged（runAsUser 101），2 副本</td>
+</tr>
+<tr>
+<td><code>service.yaml</code></td>
+<td>ClusterIP，port 80 → 8080</td>
+</tr>
+<tr>
+<td><code>virtualservice.yaml</code></td>
+<td>Istio 路由 <code>/oidc-authorize-scope-rewriter/*</code> → adapter</td>
+</tr>
+<tr>
+<td><code>namespace.yaml</code> / <code>kustomization.yaml</code></td>
+<td>namespace + 入口</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><code>dex-connector-patch.md</code> 为初始配置参考文档，不参与部署。</p>
+</blockquote>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai/kubeflow/oidc-authorize-scope-rewriter/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> oidc-authorize-scope-rewriter</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">       # 期望 2 Pod Running</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">          # Dex 配置已内置 providerDiscoveryOverrides，重启生效</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --timeout=60s</span></span></code></pre>
+<h2 id="验证">验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -sI</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "https://staii.seres.cn/oidc-authorize-scope-rewriter/authorize?client_id=JT_STAII&#x26;redirect_uri=https%3A%2F%2Fstaii.seres.cn%2Fdex%2Fcallback&#x26;response_type=code&#x26;scope=openid+profile+email&#x26;state=test"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -iE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "^HTTP|^location"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：HTTP/2 302，Location 中 scope=openid</span></span></code></pre>
+<p>浏览器访问 <code>https://staii.seres.cn/</code> → 点"集团-AI训推平台" → IAM 登录页 → 登录成功回到 Dashboard。</p>
+<h2 id="故障排查">故障排查<a class="heading-anchor" aria-hidden tabindex="-1" href="#故障排查">#</a></h2>
+<ul>
+<li><strong>scope 仍含 profile/email</strong>：Dex 未重启或配置未生效 → <code>kubectl exec -n auth deploy/dex -- cat /etc/dex/cfg/config.yaml | grep -A2 providerDiscoveryOverrides</code></li>
+<li><strong>返回 404</strong>：VirtualService 未生效 → <code>kubectl get virtualservice -n oidc-authorize-scope-rewriter</code></li>
+<li><strong>返回 302 到 oauth2-proxy 登录页</strong>：AuthorizationPolicy 未排除路径 → <code>kubectl get authorizationpolicy -n istio-system -o yaml | grep oidc-authorize-scope-rewriter</code></li>
+<li><strong>Pod CrashLoopBackOff</strong>：<code>kubectl logs -n oidc-authorize-scope-rewriter &#x3C;pod></code></li>
+</ul>
+<h2 id="回滚">回滚<a class="heading-anchor" aria-hidden tabindex="-1" href="#回滚">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ai/kubeflow/oidc-authorize-scope-rewriter/</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除 my-kubeflow/dex/dex-config-patch.yaml 中的 providerDiscoveryOverrides 段，重新 apply + 重启 Dex</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-kubeflow/dex</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment/dex</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span></span></code></pre>

@@ -1,0 +1,57 @@
+<h1 id="pytorch-megatron-scheduler-plugins">Pytorch Megatron (scheduler-plugins)<a class="heading-anchor" aria-hidden tabindex="-1" href="#pytorch-megatron-scheduler-plugins">#</a></h1>
+<p><strong>用途</strong>：基于 Megatron-LM 的 GPT 训练，基础环境验证场景。</p>
+<blockquote>
+<p>数据集和训练代码准备见上级目录 <a href="/lessons/ai/trainer/examples/pytorch-megatron"><code>../README.md</code></a>。</p>
+</blockquote>
+<h2 id="快速运行">快速运行<a class="heading-anchor" aria-hidden tabindex="-1" href="#快速运行">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单节点训练（4 GPU）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pytorch-megatron-single-node.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 多节点训练（2 节点 × 8 GPU + RoCE）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pytorch-megatron-multiple-nodes.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看训练日志</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/trainjob-name=pytorch-megatron-single-node-train</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清理</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pytorch-megatron-single-node.yaml</span></span></code></pre>
+<h2 id="yaml-选择">yaml 选择<a class="heading-anchor" aria-hidden tabindex="-1" href="#yaml-选择">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>节点数</th>
+<th>每节点 GPU</th>
+<th>总 GPU</th>
+<th>网络</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pytorch-megatron-single-node.yaml</code></td>
+<td>1</td>
+<td>4</td>
+<td>4</td>
+<td>普通</td>
+</tr>
+<tr>
+<td><code>pytorch-megatron-multiple-nodes.yaml</code></td>
+<td>2</td>
+<td>8</td>
+<td>16</td>
+<td>RoCE（8 hca）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="前置要求">前置要求<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置要求">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 基础设施已部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pvc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> megatron-data</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. scheduler-plugins-scheduler Running</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scheduler-plugins-system</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 节点资源已注册</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> node</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node-nam</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.allocatable}'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> jq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '."nvidia.com/gpu", ."rdma/hca1"'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 期望：单节点 GPU ≥ 4；多节点 GPU=8 + rdma/hca1-8 各 ≥ 1</span></span></code></pre>
+<h2 id="预期输出">预期输出<a class="heading-anchor" aria-hidden tabindex="-1" href="#预期输出">#</a></h2>
+<p>训练日志显示 loss 下降 + iteration time + throughput。</p>

@@ -1,0 +1,179 @@
+<h1 id="kube-ovn">Kube-OVN<a class="heading-anchor" aria-hidden tabindex="-1" href="#kube-ovn">#</a></h1>
+<p><a href="https://github.com/kubeovn/kube-ovn">Kube-OVN</a> 是一个基于 OVN 的 Kubernetes 网络插件，提供了丰富的网络功能，包括子网管理、网络策略、QoS、负载均衡等。</p>
+<p>本文档说明如何在已有 Cilium 的集群中部署 Kube-OVN 作为 Secondary CNI。</p>
+<h2 id="前置条件">前置条件<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置条件">#</a></h2>
+<ol>
+<li><strong>集群已部署 Cilium</strong>：确保 Cilium 已正确部署并运行</li>
+<li><strong>Cilium 配置</strong>：确保 Cilium 的 <code>cni.exclusive</code> 设置为 <code>false</code>（允许多 CNI 共存）</li>
+<li><strong>网络规划</strong>：确保 Kube-OVN 的 Pod CIDR 与 Cilium 的 Pod CIDR 不冲突</li>
+</ol>
+<h2 id="部署前准备">部署前准备<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署前准备">#</a></h2>
+<h3 id="1-检查-cilium-配置">1. 检查 Cilium 配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-检查-cilium-配置">#</a></h3>
+<p>确保 Cilium 的 <code>values.yml</code> 中 <code>cni.exclusive</code> 设置为 <code>false</code>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">cni</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  exclusive</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span></span></code></pre>
+<p>如果未设置，需要先更新 Cilium 配置：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> network/cilium</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 编辑 values.yml，设置 cni.exclusive: false</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h3 id="2-规划网络地址">2. 规划网络地址<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-规划网络地址">#</a></h3>
+<p>在部署前，需要规划以下网络地址，确保不与现有网络冲突：</p>
+<ul>
+<li><strong>Pod CIDR</strong>：Kube-OVN 的 Pod 地址段（默认：<code>10.16.0.0/16</code>）</li>
+<li><strong>Service CIDR</strong>：Kube-OVN 的 Service 地址段（默认：<code>10.96.0.0/12</code>）</li>
+<li><strong>Node Switch CIDR</strong>：节点交换机地址段（默认：<code>100.64.0.0/16</code>）</li>
+</ul>
+<p><strong>重要</strong>：确保这些地址段与 Cilium 和其他网络组件不冲突。</p>
+<h3 id="3-修改配置">3. 修改配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-修改配置">#</a></h3>
+<p>编辑 <code>values.yml</code> 文件，根据实际情况修改以下配置：</p>
+<ul>
+<li><code>ipv4.POD_CIDR</code>：Pod 地址段</li>
+<li><code>ipv4.POD_GATEWAY</code>：Pod 网关地址</li>
+<li><code>ipv4.SERVICE_CIDR</code>：Service 地址段（如果与集群 Service CIDR 不同）</li>
+<li><code>NETWORK_TYPE</code>：网络类型（geneve 或 vlan）</li>
+<li><code>TUNNEL_TYPE</code>：隧道类型（geneve, vxlan 或 stt）</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="验证部署">验证部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证部署">#</a></h2>
+<h3 id="1-检查-pod-状态">1. 检查 Pod 状态<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-检查-pod-状态">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-ovn</span></span></code></pre>
+<p>所有 Pod 应该处于 <code>Running</code> 状态。</p>
+<h3 id="2-检查-cni-配置">2. 检查 CNI 配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-检查-cni-配置">#</a></h3>
+<p>在每个节点上检查 CNI 配置文件：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在节点上执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ls</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -la</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/cni/net.d/</span></span></code></pre>
+<p>应该能看到：</p>
+<ul>
+<li>Cilium 的 CNI 配置文件（优先级更高）</li>
+<li>Kube-OVN 的 CNI 配置文件（<code>10-kube-ovn.conflist</code>，优先级为 10）</li>
+</ul>
+<h3 id="3-测试-pod-网络">3. 测试 Pod 网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-测试-pod-网络">#</a></h3>
+<p>创建一个测试 Pod，使用 Kube-OVN 网络：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Pod</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">test-kube-ovn</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  annotations</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    ovn.kubernetes.io/logical_switch</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  containers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">test</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">busybox</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    command</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: [</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"sleep"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">, </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"3600"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">]</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test-pod.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test-kube-ovn</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ping</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -c</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 8.8.8.8</span></span></code></pre>
+<h2 id="使用-kube-ovn-网络">使用 Kube-OVN 网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-kube-ovn-网络">#</a></h2>
+<h3 id="方式一通过-annotation-指定">方式一：通过 Annotation 指定<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式一通过-annotation-指定">#</a></h3>
+<p>在 Pod 或 Namespace 上添加 annotation 来使用 Kube-OVN 网络：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Pod</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-pod</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  annotations</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    ovn.kubernetes.io/logical_switch</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  containers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">app</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">nginx</span></span></code></pre>
+<h3 id="方式二通过-networkattachmentdefinition推荐">方式二：通过 NetworkAttachmentDefinition（推荐）<a class="heading-anchor" aria-hidden tabindex="-1" href="#方式二通过-networkattachmentdefinition推荐">#</a></h3>
+<p>使用 Multus CNI 和 NetworkAttachmentDefinition 来管理多个网络接口：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">k8s.cni.cncf.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">NetworkAttachmentDefinition</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kube-ovn-net</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  config</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">|</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      "cniVersion": "0.3.1",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      "type": "kube-ovn",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      "server_socket": "/run/openvswitch/kube-ovn-daemon.sock",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      "ipam": {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "type": "kube-ovn",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "server_socket": "/run/openvswitch/kube-ovn-daemon.sock"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      }</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }</span></span></code></pre>
+<p>然后在 Pod 中使用：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Pod</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-pod</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  annotations</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    k8s.v1.cni.cncf.io/networks</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kube-ovn-net</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  containers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">app</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">nginx</span></span></code></pre>
+<h2 id="与-cilium-的配合">与 Cilium 的配合<a class="heading-anchor" aria-hidden tabindex="-1" href="#与-cilium-的配合">#</a></h2>
+<h3 id="网络策略">网络策略<a class="heading-anchor" aria-hidden tabindex="-1" href="#网络策略">#</a></h3>
+<ul>
+<li><strong>Cilium</strong>：处理默认的网络策略（通过 CiliumNetworkPolicy 和 NetworkPolicy）</li>
+<li><strong>Kube-OVN</strong>：网络策略功能已禁用（<code>ENABLE_NP: "false"</code>），避免冲突</li>
+</ul>
+<h3 id="cni-选择">CNI 选择<a class="heading-anchor" aria-hidden tabindex="-1" href="#cni-选择">#</a></h3>
+<ul>
+<li><strong>默认</strong>：Pod 使用 Cilium 网络（优先级更高）</li>
+<li><strong>指定使用 Kube-OVN</strong>：通过 annotation 或 NetworkAttachmentDefinition 指定</li>
+</ul>
+<h3 id="服务发现">服务发现<a class="heading-anchor" aria-hidden tabindex="-1" href="#服务发现">#</a></h3>
+<ul>
+<li><strong>Cilium</strong>：处理默认的 Service 发现和负载均衡</li>
+<li><strong>Kube-OVN</strong>：可以创建自己的子网和逻辑交换机，提供额外的网络隔离</li>
+</ul>
+<h2 id="高级配置">高级配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#高级配置">#</a></h2>
+<h3 id="vlan-模式">VLAN 模式<a class="heading-anchor" aria-hidden tabindex="-1" href="#vlan-模式">#</a></h3>
+<p>如果需要使用 VLAN 模式（underlay 网络），修改 <code>values.yml</code>：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">NETWORK_TYPE</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"vlan"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">TUNNEL_TYPE</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"geneve"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">vlan</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  VLAN_INTERFACE_NAME</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"eth0"</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 物理网卡名称</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  VLAN_ID</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">100</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">                  # VLAN ID</span></span></code></pre>
+<h3 id="硬件卸载">硬件卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#硬件卸载">#</a></h3>
+<p>如果节点支持硬件卸载，可以启用：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">HW_OFFLOAD</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"true"</span></span></code></pre>
+<p><strong>注意</strong>：启用硬件卸载需要：</p>
+<ol>
+<li>节点支持硬件卸载功能</li>
+<li>物理网卡绑定 IP 地址</li>
+<li>禁用流量镜像</li>
+</ol>
+<h3 id="多网络栈">多网络栈<a class="heading-anchor" aria-hidden tabindex="-1" href="#多网络栈">#</a></h3>
+<p>Kube-OVN 支持 IPv4/IPv6 双栈，配置示例：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">NET_STACK</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"dual"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">ipv4</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  POD_CIDR</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"10.16.0.0/16"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  POD_GATEWAY</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"10.16.0.1"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">ipv6</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  POD_CIDR</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"fd00:10:16::/112"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  POD_GATEWAY</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"fd00:10:16::1"</span></span></code></pre>
+<h2 id="故障排查">故障排查<a class="heading-anchor" aria-hidden tabindex="-1" href="#故障排查">#</a></h2>
+<h3 id="1-pod-无法获取-ip">1. Pod 无法获取 IP<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-pod-无法获取-ip">#</a></h3>
+<p>检查 Kube-OVN Controller 日志：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kube-system</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app=kube-ovn-controller</span></span></code></pre>
+<p>检查 CNI 配置：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在节点上执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/cni/net.d/10-kube-ovn.conflist</span></span></code></pre>
+<h3 id="2-网络不通">2. 网络不通<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-网络不通">#</a></h3>
+<p>检查 OVS 状态：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在节点上执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ovs-vsctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> show</span></span></code></pre>
+<p>检查路由：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在 Pod 中执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> route</span></span></code></pre>
+<h3 id="3-cni-冲突">3. CNI 冲突<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-cni-冲突">#</a></h3>
+<p>如果出现 CNI 冲突，检查：</p>
+<ol>
+<li>Cilium 的 <code>cni.exclusive</code> 是否为 <code>false</code></li>
+<li>CNI 配置文件优先级是否正确</li>
+<li>是否有多个 CNI 插件同时管理同一个 Pod</li>
+</ol>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<p><strong>注意</strong>：卸载前确保没有 Pod 正在使用 Kube-OVN 网络，否则可能导致 Pod 网络中断。</p>
+<h2 id="参考文档">参考文档<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考文档">#</a></h2>
+<ul>
+<li><a href="https://kubeovn.github.io/">Kube-OVN 官方文档</a></li>
+<li><a href="https://github.com/kubeovn/kube-ovn">Kube-OVN GitHub</a></li>
+<li><a href="https://docs.cilium.io/en/stable/network/kubernetes/cni-chaining/">Cilium 与 Kube-OVN 集成</a></li>
+</ul>

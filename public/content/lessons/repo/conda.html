@@ -1,0 +1,65 @@
+<h1 id="部署-conda-mirror">部署 Conda Mirror<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-conda-mirror">#</a></h1>
+<p>基于 <a href="https://quetz.readthedocs.io/en/latest/">quetz</a> 提供私有 channel 和按需缓存 Mirror 功能。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ol>
+<li>修改 <code>prod/ingress.yaml</code> 中的 <code>conda.example.com</code> 为实际域名</li>
+<li>修改 <code>prod/config.toml</code>
+<ul>
+<li>访问 <a href="https://github.com/settings/applications/new">https://github.com/settings/applications/new</a> 注册填入 Authorization callback URL 值 <a href="https://conda.example.com/auth/github/authorize">https://conda.example.com/auth/github/authorize</a> (注意替换 conda.example.com 为实际域名)</li>
+<li>从上述步骤获取 client_id 和 client_secret 后修改 <code>[github]</code> 对应字段</li>
+<li>修改 <code>[users]</code> 中的 <code>admins</code> 字段，填入 GitHub 用户名分配管理员权限</li>
+<li>执行 <code>openssl rand -hex 32</code> 生成 <code>session.secret</code> 填入 <code>config.toml</code></li>
+</ul>
+</li>
+<li>修改 <code>prod/pvc.yaml</code> 中的 <code>storage</code> 大小 (只存储被拉取过的 Conda 数据，按需调整)</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> prod/</span></span></code></pre>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<ol>
+<li>访问 <a href="https://conda.example.com/">https://conda.example.com/</a> 使用 GitHub 账号登录, 点击按钮 <code>Get API Key</code> 获取 API Key</li>
+<li>创建 proxy 模式的 channel</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --request</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POST</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --url</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://conda.example.com/api/channels</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Content-Type: application/json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'X-API-Key: &#x3C;API Key>'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "name": "main",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "private": false,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_channel_url": "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_mode": "proxy"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --request</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POST</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --url</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://conda.example.com/api/channels</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Content-Type: application/json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'X-API-Key: &#x3C;API Key>'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "name": "r",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "private": false,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_channel_url": "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_mode": "proxy"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --request</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POST</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --url</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://conda.example.com/api/channels</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Content-Type: application/json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --header</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'X-API-Key: &#x3C;API Key>'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    --data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "name": "msys2",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "private": false,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_channel_url": "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "mirror_mode": "proxy"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    }'</span></span></code></pre>
+<h2 id="使用">使用<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用实际域名</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.condarc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">channels:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - defaults</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">show_channel_urls: true</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default_channels:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - https://conda.example.com/get/main</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - https://conda.example.com/get/r</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - https://conda.example.com/get/msys2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">conda</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clean</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span></span></code></pre>

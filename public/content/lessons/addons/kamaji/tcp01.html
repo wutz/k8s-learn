@@ -1,0 +1,63 @@
+<h1 id="部署独立租户-k8s-集群">部署独立租户 k8s 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署独立租户-k8s-集群">#</a></h1>
+<ul>
+<li>租户控制平面使用独立的 etcd 集群</li>
+</ul>
+<h2 id="部署控制平面">部署控制平面<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署控制平面">#</a></h2>
+<ul>
+<li>
+<p><a href="/lessons/addons/kamaji-etcd">部署 kamaji-etcd</a></p>
+</li>
+<li>
+<p>部署 tcp</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./tcp</span></span></code></pre>
+<h3 id="查看-tcp">查看 tcp<a class="heading-anchor" aria-hidden tabindex="-1" href="#查看-tcp">#</a></h3>
+<p><em>注：</em> 下文生成worker节点接入集群的命令时需要使用这里的 name: tcp01</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mc01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tcp</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    VERSION</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   INSTALLED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> VERSION</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   STATUS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   CONTROL-PLANE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ENDPOINT</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   KUBECONFIG</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">               DATASTORE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           AGE</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tcp01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   v1.32.5</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   v1.32.5</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             Ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    192.168.3.102:6443</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       tcp01-admin-kubeconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   tcp01-kamaji-etcd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   52s</span></span></code></pre>
+<h3 id="获取-cluster-a-的-kubeconfig">获取 Cluster A 的 Kubeconfig：<a class="heading-anchor" aria-hidden tabindex="-1" href="#获取-cluster-a-的-kubeconfig">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secrets</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tcp01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tcp01-admin-kubeconfig</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> json</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> jq</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '.data["admin.conf"]'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> base64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --decode</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tcp01.yaml</span></span></code></pre>
+<h2 id="添加-worker-节点">添加 worker 节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#添加-worker-节点">#</a></h2>
+<ul>
+<li>生成接入集群的命令</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mc01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeadm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --kubeconfig=tcp01.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> token</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --print-join-command</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubeadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> join</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.3.102:6443</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --token</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nef29m.6u18hra5jmnjs5o8</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --discovery-token-ca-cert-hash</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sha256:912c1b3d29b1ae250f1fbbdd9a1693333680b58ddef1d289818d3be288a01a2f</span></span></code></pre>
+<p><code>token 默认有效期： 24h</code></p>
+<ul>
+<li>复制安装脚本到所有 worker 节点</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./worker</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaki.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generate_containerd_certs.py</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root@192.168.3.50:/root</span></span></code></pre>
+<ul>
+<li>接入集群 （worker 节点执行）</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">env</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  JOIN_URL="192.168.3.102:6443"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  JOIN_TOKEN="nef29m.6u18hra5jmnjs5o8"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  JOIN_TOKEN_CACERT_HASH="sha256:912c1b3d29b1ae250f1fbbdd9a1693333680b58ddef1d289818d3be288a01a2f"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  KUBERNETES_VERSION="v1.32.5"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  FILES_REPO="http://file.home.lan:8080/k8s/v1.32.5/"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  /root/yaki.sh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> join</span></span></code></pre>
+<ul>
+<li>配置 containerd (worker节点)</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./generate_containerd_certs.py</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> daemon-reload</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> containerd.service</span></span></code></pre>
+<ul>
+<li>配置 kubelet（worker节点）</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "serverTLSBootstrap: true"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /var/lib/kubelet/config.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubelet</span></span></code></pre>
+<ul>
+<li>授权 csr</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">for</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> csr</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> in</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> $(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csr</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'kubernetes.io/kubelet-serving'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Pending</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> awk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{print $1}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">); </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> certificate</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> approve</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $csr</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span></code></pre>
+<ul>
+<li><a href="https://ktdmyj58g1.feishu.cn/wiki/Mnf4wjK6VicLwVk7Kx7cYK5on5c">Kubernetes Metrics Server 刮取指标失败问题</a></li>
+</ul>
+<h2 id="部署-cilium">部署 <a href="/lessons/network/cilium">cilium</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-cilium">#</a></h2>
+<h2 id="部署-metrics-server">部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/metrics-server/README.md">metrics-server</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-metrics-server">#</a></h2>

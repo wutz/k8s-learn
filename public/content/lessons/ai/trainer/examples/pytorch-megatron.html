@@ -1,0 +1,214 @@
+<h1 id="pytorch-megatron-训练示例">Pytorch Megatron 训练示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#pytorch-megatron-训练示例">#</a></h1>
+<p><strong>用途</strong>：基于 <a href="https://github.com/NVIDIA/Megatron-LM">NVIDIA Megatron-LM</a> 的 GPT 训练示例，支持单节点和多节点（RoCE 网络）模式。</p>
+<h2 id="工作流一次性准备">工作流（一次性准备）<a class="heading-anchor" aria-hidden tabindex="-1" href="#工作流一次性准备">#</a></h2>
+<h3 id="1-创建共享存储和开发容器">1. 创建共享存储和开发容器<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-创建共享存储和开发容器">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pytorch-megatron-base.yaml</span></span></code></pre>
+<blockquote>
+<p>创建 PVC <code>megatron-data</code> 和开发容器 <code>megatron-dev</code>，后续存储均挂载在 <code>/workspace</code> 下，三调度器共享。</p>
+</blockquote>
+<h3 id="2-在开发容器中准备数据集">2. 在开发容器中准备数据集<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-在开发容器中准备数据集">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/megatron-dev</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /workspace</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> http_proxy</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">http</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">10</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">29</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">1</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">201</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">8888</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> https_proxy</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">http</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">10</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">29</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">1</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">201</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">8888</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> modelscope</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> datasets</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">modelscope</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> download</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --dataset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wutaizeng/enwiki</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --local_dir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./datasets</span></span></code></pre>
+<h3 id="3-在开发容器中准备训练代码">3. 在开发容器中准备训练代码<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-在开发容器中准备训练代码">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /workspace</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> http_proxy</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">http</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">10</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">29</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">1</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">201</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">3128</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> https_proxy</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">http</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">10</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">29</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">1</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">201</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">3128</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">git</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clone</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> core_v0.13.1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://github.com/NVIDIA/Megatron-LM.git</span></span></code></pre>
+<h3 id="4-修改训练脚本">4. 修改训练脚本<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-修改训练脚本">#</a></h3>
+<p><code>PET</code> 开头环境变量由 trainer v2 框架注入，其它参数调整与训练框架自身相关。以下是对 <code>examples/gpt3/train_gpt3_175b_distributed.sh</code> 的改动：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#ABB2BF">diff --git a/examples/gpt3/train_gpt3_175b_distributed.sh b/examples/gpt3/train_gpt3_175b_distributed.sh</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#61AFEF">--- a/examples/gpt3/train_gpt3_175b_distributed.sh</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#61AFEF">+++ b/examples/gpt3/train_gpt3_175b_distributed.sh</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-light-font-weight:bold;--shiki-dark:#ABB2BF;--shiki-dark-font-weight:inherit">@@ -4,12 +4,12 @@</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> export CUDA_DEVICE_MAX_CONNECTIONS=1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-GPUS_PER_NODE=8</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+GPUS_PER_NODE=$PET_NPROC_PER_NODE</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> # Change for multinode config</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-MASTER_ADDR=localhost</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-MASTER_PORT=6000</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-NUM_NODES=1</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-NODE_RANK=0</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+MASTER_ADDR=$PET_MASTER_ADDR</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+MASTER_PORT=$PET_MASTER_PORT</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+NUM_NODES=$PET_NNODES</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+NODE_RANK=$PET_NODE_RANK</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> WORLD_SIZE=$(($GPUS_PER_NODE*$NUM_NODES))</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-light-font-weight:bold;--shiki-dark:#ABB2BF;--shiki-dark-font-weight:inherit">@@ -26,18 +26,18 @@</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> DISTRIBUTED_ARGS=(</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> GPT_MODEL_ARGS=(</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --num-layers 96</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --hidden-size 12288</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --num-attention-heads 96</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --seq-length 2048</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --num-layers 12</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --hidden-size 512</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --num-attention-heads 8</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --seq-length 1024</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     --max-position-embeddings 2048</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     --attention-backend auto</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> )</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> TRAINING_ARGS=(</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --micro-batch-size 1</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --global-batch-size 1536</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --rampup-batch-size 16 16 5859375</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --micro-batch-size 32</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --global-batch-size 1024</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    #--rampup-batch-size 16 16 5859375</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     --train-iters 500000</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-light-font-weight:bold;--shiki-dark:#ABB2BF;--shiki-dark-font-weight:inherit">@@ -54,7 +54,7 @@</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> TRAINING_ARGS=(</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> MODEL_PARALLEL_ARGS=(</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-        --tensor-model-parallel-size 8</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-       --pipeline-model-parallel-size 16</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+        --tensor-model-parallel-size 1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+       --pipeline-model-parallel-size 1</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> )</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-light-font-weight:bold;--shiki-dark:#ABB2BF;--shiki-dark-font-weight:inherit">@@ -66,7 +66,9 @@</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> DATA_ARGS=(</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> EVAL_AND_LOGGING_ARGS=(</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     --log-interval 100</span></span>
+<span class="line"><span style="--shiki-light:#B31D28;--shiki-dark:#E06C75">-    --save-interval 10000</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --log-throughput</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --log-progress</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#98C379">+    --save-interval 1000</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     --eval-interval 1000</span></span></code></pre>
+<blockquote>
+<p>以上 diff 为单节点 4 GPU 场景的参数（TP=1, PP=1, micro-batch=32）。多节点训练需调整并行参数，见下方约束。</p>
+</blockquote>
+<h2 id="提交训练">提交训练<a class="heading-anchor" aria-hidden tabindex="-1" href="#提交训练">#</a></h2>
+<h3 id="trainingruntime-与-trainjob">TrainingRuntime 与 TrainJob<a class="heading-anchor" aria-hidden tabindex="-1" href="#trainingruntime-与-trainjob">#</a></h3>
+<ul>
+<li><strong>TrainingRuntime</strong>：作业模板，定义存储挂载、镜像、资源等。存储挂载必须在此处定义。</li>
+<li><strong>TrainJob</strong>：训练任务实例，引用 TrainingRuntime，可覆盖模板的 <code>image</code>、<code>command</code>、<code>env</code> 等参数。</li>
+</ul>
+<h3 id="并行约束">并行约束<a class="heading-anchor" aria-hidden tabindex="-1" href="#并行约束">#</a></h3>
+<p>根据是否跨节点（即是否使用 RoCE 网络），选择不同的训练任务示例：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>numProcPerNode</th>
+<th>tensor-model-parallel-size</th>
+<th>pipeline-model-parallel-size</th>
+<th>约束</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单节点</td>
+<td>= <code>resources.limits.nvidia.com/gpu</code></td>
+<td>≤ numProcPerNode</td>
+<td>1</td>
+<td>numProcPerNode 是 TP 的整数倍；TP > 1 时触发数据并行</td>
+</tr>
+<tr>
+<td>多节点</td>
+<td>= 8（满卡）</td>
+<td>= numProcPerNode（=8）</td>
+<td>numNodes 的约数</td>
+<td>numNodes 是 PP 的整数倍</td>
+</tr>
+</tbody>
+</table>
+<p>多节点训练作业 YAML 中已包含 RoCE 网络配置：</p>
+<ul>
+<li><code>annotations.k8s.v1.cni.cncf.io/networks</code>：挂载 8 个 Spiderpool NetworkAttachmentDefinition（<code>hca1</code>-<code>hca8</code>）</li>
+<li><code>resources.limits.rdma/hca1</code>-<code>rdma/hca8</code>：各 1</li>
+<li><code>NCCL_IB_GID_INDEX=7</code>：RoCE v2 + IP 行的 GID</li>
+</ul>
+<h3 id="提交命令">提交命令<a class="heading-anchor" aria-hidden tabindex="-1" href="#提交命令">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 单节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> volcano/pytorch-megatron-single-node.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 多节点（需 RoCE 网络）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> volcano/pytorch-megatron-multiple-nodes.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看训练日志</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/trainjob-name=pytorch-megatron-single-node-train</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span></span></code></pre>
+<blockquote>
+<p>其它调度器见下方<a href="#%E8%B0%83%E5%BA%A6%E5%99%A8%E9%80%89%E6%8B%A9">调度器选择</a>，将 <code>volcano/</code> 替换为对应目录。</p>
+</blockquote>
+<h3 id="批大小约束">批大小约束<a class="heading-anchor" aria-hidden tabindex="-1" href="#批大小约束">#</a></h3>
+<ul>
+<li><code>--global-batch-size</code> 必须是 <code>--micro-batch-size × data-parallel-size</code> 的整数倍</li>
+<li><code>--micro-batch-size</code> 越大训练越快，但显存占用更多，触发 OOM 时减小</li>
+</ul>
+<h3 id="多节点满-8-卡说明">多节点满 8 卡说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#多节点满-8-卡说明">#</a></h3>
+<p>多节点训练必须满 8 卡使用，与 RoCE 网络相关（IB 不存在此问题）：</p>
+<ul>
+<li>一个节点启动多实例时，RoCE GID 是自增的，需要 Pod 启动时动态获取</li>
+<li>一个节点启动多实例时，申请 RoCE IP 容易触发上限</li>
+</ul>
+<h2 id="调度器选择">调度器选择<a class="heading-anchor" aria-hidden tabindex="-1" href="#调度器选择">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>调度器</th>
+<th>推荐场景</th>
+<th>目录</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Volcano （默认）</strong></td>
+<td>多租户优先级抢占</td>
+<td><a href="/lessons/ai/trainer/examples/pytorch-megatron/volcano"><code>volcano/</code></a></td>
+</tr>
+<tr>
+<td>Kueue</td>
+<td>多租户配额控制</td>
+<td><a href="/lessons/ai/trainer/examples/pytorch-megatron/kueue"><code>kueue/</code></a></td>
+</tr>
+<tr>
+<td>scheduler-plugins</td>
+<td>基础验证、快速测试</td>
+<td><a href="/lessons/ai/trainer/examples/pytorch-megatron/scheduler-plugins"><code>scheduler-plugins/</code></a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="关键参数">关键参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#关键参数">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>numProcPerNode</code></td>
+<td>等于 <code>resources.limits.nvidia.com/gpu</code></td>
+<td>所有</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_GID_INDEX=7</code></td>
+<td>RoCE v2 + IP 行的 GID</td>
+<td>多节点</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_HCA=mlx5</code></td>
+<td>指定 IB HCA 前缀</td>
+<td>多节点</td>
+</tr>
+<tr>
+<td><code>NCCL_IB_QPS_PER_CONNECTION=8</code></td>
+<td>每连接 QP 数</td>
+<td>多节点</td>
+</tr>
+<tr>
+<td><code>NCCL_SOCKET_IFNAME=eth0</code></td>
+<td>NCCL socket 网络接口</td>
+<td>所有</td>
+</tr>
+</tbody>
+</table>

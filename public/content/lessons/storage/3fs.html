@@ -1,0 +1,21 @@
+<h1 id="3fs">3FS<a class="heading-anchor" aria-hidden tabindex="-1" href="#3fs">#</a></h1>
+<p>Fire-Flyer File System (<a href="https://github.com/deepseek-ai/3FS">3FS</a>) 是一种高性能分布式文件系统，旨在应对 AI 训练和推理工作负载的挑战。它利用现代 SSD 和 RDMA 网络来提供一个共享存储层，从而简化分布式应用程序的开发。</p>
+<p>在 Kubernetes 上部署 3FS 使用项目 <a href="https://github.com/aliyun/kvc-3fs-operator">kvc-3fs-operator</a> 来管理 3FS 集群的生命周期。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>元数据与数据存储可用容量配比 <code>4.8GiB : 1TiB</code></li>
+<li>元数据存储至少 3 个节点，每个节点配置独立 SSD, 可以使用 3 个管理节点</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkfs.xfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -L</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> data0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/nvme0n1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /opt/3fs</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab{,.orig}</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "LABEL=data0 /opt/3fs xfs defaults,noatime,nodiratime 0 0"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>
+<ul>
+<li>数据存储至少 2 个节点，每个节点配置 RDMA 网卡和独立 SSD, 可以使用 GPU 节点</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">seq</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">xargs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -I</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{} mkfs.xfs -L data{} /dev/nvme{}n1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /data{0..3}</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab{,.orig}</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">seq</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">xargs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -I</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">{} echo "LABEL=data{} /data{} xfs defaults,noatime,nodiratime 0 0" >> /etc/fstab</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>

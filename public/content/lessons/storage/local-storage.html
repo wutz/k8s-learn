@@ -1,0 +1,36 @@
+<h1 id="local-storage">local-storage<a class="heading-anchor" aria-hidden tabindex="-1" href="#local-storage">#</a></h1>
+<p><a href="https://github.com/rancher/local-path-provisioner">local-storage</a> 是一个 Kubernetes 本地存储解决方案，它使用本地磁盘作为存储后端，为 Kubernetes 提供本地存储服务。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待所有 pod 就绪</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> wait</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> local-path-storage</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --for=condition=ready</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app=local-path-provisioner</span></span></code></pre>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests/local-path.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> local-path-pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests/local-path.yaml</span></span></code></pre>
+<h2 id="添加本地-nvme-ssd-的-storageclass-local-nvme">添加本地 nvme ssd 的 storageClass <code>local-nvme</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#添加本地-nvme-ssd-的-storageclass-local-nvme">#</a></h2>
+<p>例如，添加 /dev/nvme0n1 其挂载路径为 <code>/data1</code></p>
+<ol>
+<li>格式化 <code>/dev/nvme0n1</code> 并挂载到 <code>/data1</code></li>
+<li>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/local-storage/patch.yaml">patch.yaml</a> 中 <code>local-nvme</code> 下的 <code>paths</code> 值</li>
+<li>取消注释 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/local-storage/kustomization.yaml">kustomization.yaml</a> 中的 <code>local-nvme.yaml</code> 部分</li>
+<li>更新 <code>kubectl apply -k .</code></li>
+<li>测试 <code>kubectl apply -f tests/local-nvme.yaml</code></li>
+</ol>
+<h2 id="添加共享文件系统-storageclass-shared-fs">添加共享文件系统 storageClass <code>shared-fs</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#添加共享文件系统-storageclass-shared-fs">#</a></h2>
+<blockquote>
+<ul>
+<li>可以根据需要自定义 storageClass 名称</li>
+<li>适用于 GPFS 启用多租户下原生 CSI 由于权限无法的场景使用，通过此 CSI 的限制不支持设置 Quota 和 QoS</li>
+</ul>
+</blockquote>
+<ol>
+<li>共享文件系统挂载到 <code>/fs0</code></li>
+<li>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/local-storage/patch.yaml">patch.yaml</a> 中 <code>shared-fs</code> 下的 <code>sharedFilesystemPath</code> 值</li>
+<li>取消注释 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/local-storage/kustomization.yaml">kustomization.yaml</a> 中的 <code>shared-fs.yaml</code> 部分</li>
+<li>更新 <code>kubectl apply -k .</code></li>
+<li>测试 <code>kubectl apply -f tests/shared-fs.yaml</code></li>
+</ol>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k.</span></span></code></pre>

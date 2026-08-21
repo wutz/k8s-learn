@@ -1,0 +1,9 @@
+<h1 id="kuberay-operator"><a href="https://docs.ray.io/en/releases-2.55.1/cluster/kubernetes/getting-started/kuberay-operator-installation.html">kuberay-operator</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#kuberay-operator">#</a></h1>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="配置调度器">配置调度器<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置调度器">#</a></h2>
+<ul>
+<li>配置 <code>values.yaml</code> 中 <code>batchScheduler.name: "volcano"</code></li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

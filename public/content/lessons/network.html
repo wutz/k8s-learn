@@ -1,0 +1,95 @@
+<h1 id="k8s-网络">K8S 网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#k8s-网络">#</a></h1>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>CNI
+<ul>
+<li>部署 <a href="/lessons/network/cilium">cilium</a> 提供 CNI 服务, 作为缺省 CNI</li>
+<li>[可选] 部署 <a href="/lessons/network/network-operator">network-operator</a> 提供 <strong>Infiniband/RoCE</strong> 设备支持</li>
+<li>[可选] 部署 <a href="/lessons/network/kube-ovn">kube-ovn</a> 作为 Secondary CNI, 主要用于为 <a href="/lessons/compute/kubevirt">KubeVirt</a> 提供虚拟机网络</li>
+</ul>
+</li>
+<li>部署 <a href="/lessons/network/metallb">MetalLB</a> 提供 LoadBalancer 服务</li>
+<li>[推荐] 部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/ingress-nginx/">Ingress Nginx</a> 提供 Ingress 服务</li>
+<li>[可选] 部署 <a href="/lessons/network/istio">Istio</a> 提供 Gateway API, 推理网关和 ServiceMesh 服务</li>
+<li>[可选] 部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/cert-manager/">CertManager</a> 提供 TLS 证书管理服务</li>
+</ul>
+<h2 id="基本概念">基本概念<a class="heading-anchor" aria-hidden tabindex="-1" href="#基本概念">#</a></h2>
+<p><img src="/content/images/62b525dc-network.png" alt="network"></p>
+<ul>
+<li>CNI: 解决 Pod 与 Pod 间 IP 互通, 用于东西流量通信
+<ul>
+<li>通过 <a href="/lessons/network/cilium">Cilium</a> 提供，更低延迟和更高性能</li>
+<li>不同 CNI 选择参考 <a href="https://itnext.io/benchmark-results-of-kubernetes-network-plugins-cni-over-40gbit-s-network-2024-156f085a5e4e">Benchmark results of Kubernetes network plugins (CNI) over 40Gbit/s network</a></li>
+</ul>
+</li>
+<li>Service: 分布式负载均衡器
+<ul>
+<li>Headless: 通过 DNS 实现，查询 DNS 获得所有 Pod IP。通常用于 StatefulSet 负载 （Database 等），其自己处理连接
+<ul>
+<li>通过 CoreDNS 提供</li>
+</ul>
+</li>
+<li>ClusterIP: 分配一个唯一 VIP （不能 Ping），在每个节点设置 DNAT 其负责在 Client 端转换 VIP 到 Pod ID. 通常用于 Deployment 无状态服务
+<ul>
+<li>通过 Kubeproxy 提供</li>
+</ul>
+</li>
+<li>NodePort: 构建在 ClusterIP 之上在 root network namespace 中分配一个唯一的静态 port. 当流量从任意 node 到达此静态 port 时它会转发流量到一个健康的 Pod 上
+<ul>
+<li>通过 Kubeproxy 提供</li>
+</ul>
+</li>
+<li>LoadBalancer: 使用外部的用户流量到达集群中。每个 LoadBalancer Service 都会分配一个可路由的 IP 通过 BGP 或者 ARP 通告底层物理网络上。通常云上提供外部 L4 负载均衡器，或者私有集群使用 MetalLB
+<ul>
+<li>通过 <a href="/lessons/network/metallb">MetalLB</a> 提供</li>
+</ul>
+</li>
+<li>Service Mesh: 用于集群内应用程序间流量管理, 可观测性和安全性
+<ul>
+<li>通过 <a href="/lessons/network/istio">Istio</a> 提供</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Ingress &#x26; Egress: 用于集群南北流量通信
+<ul>
+<li>Ingress API: 将流量传入集群内不同服务的原始方式.
+<ul>
+<li>通过 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/nginx/">Ingress Nginx</a> 实现</li>
+</ul>
+</li>
+<li>Gateway API: Ingress API 改进版本
+<ul>
+<li>通过 <a href="/lessons/network/istio">Istio</a> 提供</li>
+</ul>
+</li>
+<li>Egress: 缺省不进行任何限制出口流量
+<ul>
+<li>通过 <a href="/lessons/network/cilium">Cilium</a> 提供</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Other
+<ul>
+<li>Network Policy: 过滤 Pod 流量, 用于限制 Pod 间通信. 通常用于隔离不同用户间 Pod 通信
+<ul>
+<li>通过 <a href="/lessons/network/cilium">Cilium</a> 提供</li>
+</ul>
+</li>
+<li>DNS: 用于集群服务发现
+<ul>
+<li>通过 CoreDNS 提供</li>
+</ul>
+</li>
+<li>TLS: 用于创建 TLS 证书，常见开启 Ingress 的 HTTPS 依赖 TLS
+<ul>
+<li>通过 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/cert-manager/">CertManager</a> 提供</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>深入阅读 <a href="https://www.tkng.io/">THE KUBERNETES NETWORKING GUIDE</a></p>
+</blockquote>

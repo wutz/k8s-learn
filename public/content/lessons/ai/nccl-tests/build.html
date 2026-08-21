@@ -1,0 +1,38 @@
+<h1 id="构建-nccl-tests-镜像">构建 nccl-tests 镜像<a class="heading-anchor" aria-hidden tabindex="-1" href="#构建-nccl-tests-镜像">#</a></h1>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 构建镜像</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --platform</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> linux/amd64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -t</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mir.blsc.cn/library/coreweave/nccl-tests:13.1.0-devel-ubuntu22.04-nccl2.29.2-1-2276a5e-mpi1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 推送到镜像仓库</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> push</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mir.blsc.cn/library/coreweave/nccl-tests:13.1.0-devel-ubuntu22.04-nccl2.29.2-1-2276a5e-mpi1</span></span></code></pre>
+<h2 id="构建后验证">构建后验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#构建后验证">#</a></h2>
+<p>构建完镜像本地跑一下，确认 mpiuser、sshd_config、hostkey 都到位：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">TAG</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">mir.blsc.cn/library/coreweave/nccl-tests:13.1.0-devel-ubuntu22.04-nccl2.29.2-1-2276a5e-mpi1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 验证 mpiuser 存在 (uid 1000)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> run</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --rm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1000</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $TAG</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 预期: uid=1000(mpiuser) gid=1000(mpiuser) groups=1000(mpiuser)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 验证 sshd_config 与 hostkey 文件就位且 mpiuser 可读</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> run</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --rm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1000</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $TAG</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -la</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    /home/mpiuser/.sshd_config</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    /home/mpiuser/ssh_host_rsa_key</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 验证 sshd 能用 mpiuser 起来 (前台运行 5 秒后自杀)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> run</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --rm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1000</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $TAG</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -c</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    'timeout 5 /usr/sbin/sshd -De -f /home/mpiuser/.sshd_config; echo "exit=$?"'</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 预期看到: Server listening on 0.0.0.0 port 2222</span></span></code></pre>
+<h2 id="推送后验证">推送后验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#推送后验证">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 4. 验证 registry 收到正确 digest</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pull</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $TAG</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> images</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --digests</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 2276a5e-mpi1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 5. 节点上确认拉到新版本 (yaml 里建议 imagePullPolicy: Always)</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#    或在节点上手动清理旧镜像: crictl rmi &#x3C;旧 sha></span></span></code></pre>
+<h2 id="tag-命名约定">tag 命名约定<a class="heading-anchor" aria-hidden tabindex="-1" href="#tag-命名约定">#</a></h2>
+<p>每次修改 Dockerfile 或 sshd_config，递增 <code>-mpiN</code> 后缀：</p>
+<ul>
+<li><code>-mpi1</code>：首版（修复 mpiuser/hostkey/sshd_config）</li>
+<li><code>-mpi2</code>：下次修改时使用</li>
+<li>...</li>
+</ul>
+<p>不要复用同一个 tag，否则节点 IfNotPresent 缓存会让你怀疑人生。</p>

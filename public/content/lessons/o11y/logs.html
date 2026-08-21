@@ -1,0 +1,219 @@
+<h1 id="logs-日志采集">LOGS 日志采集<a class="heading-anchor" aria-hidden tabindex="-1" href="#logs-日志采集">#</a></h1>
+<ul>
+<li>
+<p>loki：grafana 的 loki 组件</p>
+<ul>
+<li>部署需要 对象存储支持，建议使用对象存储</li>
+<li>底层日志收集组件为 promtail</li>
+</ul>
+</li>
+<li>
+<p>vl: victoralogs 日志采集组件</p>
+<ul>
+<li>grafana 查询需要安装独立的 plugins，请执行安装，可参考 vm.vm 的配置</li>
+<li>底层日志收集组件为 fluent-bit</li>
+</ul>
+</li>
+<li>
+<p>collectors：采集器</p>
+<ul>
+<li>Kubernetes-event-exporter: k8s 事件采集组件
+<ul>
+<li>已配置 往 victoralogs 中的写入，需先部署 victoralogs</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>在写入和查询上，victoralogs 更灵活</p>
+</blockquote>
+<h2 id="loki-部署">loki 部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#loki-部署">#</a></h2>
+<p>部署依赖 helm,helmwave,kubectl，请先确保相关工具已安装</p>
+<p>具体的细节请查看子目录中的文档，这里仅说明部署步骤。</p>
+<h3 id="配置文件">配置文件：<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置文件">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./loki</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">|</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> values</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">   |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> _event.yml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> k8s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> event</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 收集组件配置</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">   |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> _loki.yml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 默认配置</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">   |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> _promtail.yml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> promtail</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 默认配置</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">   |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> prod.yml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">         -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 生产环境配置</span></span></code></pre>
+<p>部署前需先准备好支持 s3 协议的对象存储，然后修改 ./loki/values/prod.yml 中的下述配置：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">loki</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  ...</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  storage</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    type</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">s3</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    s3</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      endpoint</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"..."</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                 // &#x3C;-- 修改这里</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      accessKeyId</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"..."</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              // &#x3C;-- 修改这里</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      secretAccessKey</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"..."</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">          // &#x3C;-- 修改这里</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      s3ForcePathStyle</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      insecure</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    bucketNames</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      chunks</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">loki                    // &#x3C;-- 修改这里(如有必要)</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      ruler</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">loki                     // &#x3C;-- 修改这里(如有必要)</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      admin</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">loki                     // &#x3C;-- 修改这里(如有必要)</span></span></code></pre>
+<h3 id="部署-loki">部署 loki<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-loki">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># build 要部署的 manafist，build 后可进行检查</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./build_loki.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交到 k8s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./up_loki.sh</span></span></code></pre>
+<h3 id="部署-promtail---节点-pod-日志收集">部署 promtail - 节点 pod 日志收集<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-promtail---节点-pod-日志收集">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># build 要部署的 manafist，build 后可进行检查</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./build_promtail.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交到 k8s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./up_promtail.sh</span></span></code></pre>
+<h3 id="部署-k8s-event-exporter---k8s-事件收集">部署 k8s-event-exporter - k8s 事件收集<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-k8s-event-exporter---k8s-事件收集">#</a></h3>
+<blockquote>
+<p>这里的 k8s-event-exporter 和 ./logs/collectors/kubernetes-event-exporter 本质上是一样的，可以按需部署</p>
+<p>这里的 k8s-event-exporter 的配置只会往 loki 中写数据</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> loki</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># build 要部署的 manafist，build 后可进行检查</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./build_event.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交到 k8s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./up_event.sh</span></span></code></pre>
+<h3 id="在-grafana-中添加-loki-数据源">在 grafana 中添加 loki 数据源<a class="heading-anchor" aria-hidden tabindex="-1" href="#在-grafana-中添加-loki-数据源">#</a></h3>
+<p>新增 loki 数据源，在 Connection 中 URL 配置 <code>http://loki-gateway.vm.svc</code>  即可</p>
+<p>注意：本配置文件默认部署到 <code>vm</code> namespace，如果修改部署的 namespace，上述配置应做对应的修改</p>
+<p><img src="/content/images/617b945f-image-20250113175028702.png" alt="image-20250113175028702"></p>
+<h2 id="victorialogs-部署">Victorialogs 部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#victorialogs-部署">#</a></h2>
+<p>部署依赖 helm,helmwave,kubectl，请先确保相关工具已安装</p>
+<p>具体的细节请查看子目录中的文档，这里仅说明部署步骤。</p>
+<h3 id="配置文件-1">配置文件：<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置文件-1">#</a></h3>
+<pre><code>./vml
+|- values
+   |- _.yml            - 默认配置
+   |- prod.yml         - 生产环境配置
+</code></pre>
+<h3 id="部署">部署:<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vl</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># build 要部署的 manafist，build 后可进行检查</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> build</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交到 k8s</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ENV</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">prod</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span></span></code></pre>
+<blockquote>
+<p>默认的配置中已开启 fluent-bit 日志收集组件，无需额外部署</p>
+</blockquote>
+<h3 id="grafana-中安装-victorialogs-查询-plugin">grafana 中安装 victorialogs 查询 plugin<a class="heading-anchor" aria-hidden tabindex="-1" href="#grafana-中安装-victorialogs-查询-plugin">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在部署 vm.vm 时，取消以下注释即可，如果是自己部署的 grafana，参考下面的配置即可</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">grafana</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">	...</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  env</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 安装 victorialogs-datasource，用于查询 victorialogs 的日志</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  GF_INSTALL_PLUGINS</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">https://github.com/VictoriaMetrics/victorialogs-datasource/releases/download/v0.3.0/victorialogs-datasource-v0.3.0.zip;victorialogs-datasource</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">victorialogs-datasource</span></span>
+<span class="line"></span></code></pre>
+<h3 id="grafana-中添加-victorialogs-数据源">grafana 中添加 VictoriaLogs 数据源<a class="heading-anchor" aria-hidden tabindex="-1" href="#grafana-中添加-victorialogs-数据源">#</a></h3>
+<p>新增 VictoriaLogs 数据源，在 HTTP 中 URL 配置 <code>http://vl-victoria-logs-single-server.vm.svc:9428</code>  即可</p>
+<p>注意：本配置文件默认部署到 <code>vm</code> namespace，如果修改部署的 namespace，上述配置应做对应的修改</p>
+<p><img src="/content/images/94f4665c-image-20250113174940978.png" alt="image-20250113174940978"></p>
+<h3 id="部署-kubernetes-event-exporter">部署 Kubernetes-event-exporter<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-kubernetes-event-exporter">#</a></h3>
+<p>如果部署了 loki，请直接部署 loki 中的 kubernetes-event-exporter</p>
+<h3 id="配置文件-2">配置文件<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置文件-2">#</a></h3>
+<p>配置文件位于 ./collectors/kubernetes-event-exporter/base/conf 下</p>
+<p>关键配置：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">logLevel</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">debug</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">logFormat</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">json</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kubeQPS</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">100</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kubeBurst</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">500</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">maxEventAgeSeconds</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">60</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metricsNamePrefix</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">event_exporter_</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">route</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  routes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">match</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">receiver</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"victotialogs"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    #- receiver: "loki"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">receivers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#ABB2BF">...</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">- </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"victotialogs"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # 参考：https://docs.victoriametrics.com/victorialogs/data-ingestion/fluentbit/</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  webhook</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    headers</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># optional</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      AccountID</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">0</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      ProjectID</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">0</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    #endpoint: http://vl-victoria-logs-single-server:9428/insert/jsonline?_stream_fields=region,namespace&#x26;_msg_field=_msg&#x26;_time_field=_time</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    endpoint</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">http://vl-victoria-logs-single-server:9428/insert/jsonline?_stream_fields=cluster,classify,namespace&#x26;_msg_field=msg&#x26;_time_field=time</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    layout</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">      # 自定义</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      cluster</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .ClusterName }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      classify</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"k8s-event"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      time</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .FirstTimestamp.Format </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">2006-01-02T15:04:05Z</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.Namespace }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      msg</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Message }}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      start</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .FirstTimestamp }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      end</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .LastTimestamp }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      host</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Source.Host }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      component</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Source.Component }}"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">        </span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      type</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Type }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      reason</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">   : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Reason }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      count</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .Count }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.Kind }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">     : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.Name }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      uid</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.UID }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.APIVersion }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      resourceVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.ResourceVersion }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      fieldPath</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.FieldPath }}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      labels</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ toJson .InvolvedObject.Labels}}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      ownerReferences</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ toJson .InvolvedObject.OwnerReferences }}"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      deleted</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> : </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"{{ .InvolvedObject.Deleted }}"</span></span>
+<span class="line"></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># - name: "loki"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   loki:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#     headers: # optional</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#       X-Scope-OrgID: 0</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#       Content-Type: application/json</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#     streamLabels:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#       classify: k8s-event</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#     url: http://loki-gateway/loki/api/v1/push</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#     layout:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#       streams:</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#       - stream: </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           namespace: "{{ .Namespace }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           host     : "{{ .Source.Host }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           component: "{{ .Source.Component }}"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">            </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           type     : "{{ .Type }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           reason   : "{{ .Reason }}"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">          </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           kind     : "{{ .InvolvedObject.Kind }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           name     : "{{ .InvolvedObject.Name }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           uid      : "{{ .InvolvedObject.UID }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           apiVersion: "{{ .InvolvedObject.APIVersion }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           resourceVersion : "{{ .InvolvedObject.ResourceVersion }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           fieldPath: "{{ .InvolvedObject.FieldPath }}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           ownerReferences: "{{ toJson .InvolvedObject.OwnerReferences }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#           deleted : "{{ .InvolvedObject.Deleted }}"</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#         values: </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#         - [ "{{ .FirstTimestamp.Unix }}" , {message: "{{ .Message }}", labels: "{{ toJson .InvolvedObject.Labels}}", count: "{{ .Count }}"} ]</span></span>
+<span class="line"></span></code></pre>
+<h3 id="部署-1">部署：<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-1">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./collectors/kubernetes-event-exporter/base</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># build 要部署的 manafist，build 后可进行检查（主要）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./build</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 提交到 k8s</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./up</span></span></code></pre>
+<p>部署后，在查询日志时使用 <code>classify</code> = <code>k8s-event</code> 即可查询 k8s 事件日志</p>
+<p><img src="/content/images/1e266829-image-20250113174749108.png" alt="image-20250113174749108"></p>

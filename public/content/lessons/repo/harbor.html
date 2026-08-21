@@ -1,0 +1,207 @@
+<h1 id="harbor-镜像仓库istio-ingress">Harbor 镜像仓库（Istio Ingress）<a class="heading-anchor" aria-hidden tabindex="-1" href="#harbor-镜像仓库istio-ingress">#</a></h1>
+<p><a href="https://github.com/goharbor/harbor">Harbor</a> 是一个用于存储和分发 Docker 镜像的仓库，支持 Docker Registry、Helm Chart 等多种镜像格式。</p>
+<p>本方案是<a href="/lessons/repo">仓库服务</a>的<strong>备选</strong>镜像仓库。缺省方案是 <a href="/lessons/repo/registry">Registry</a>，两者部署其一即可。</p>
+<p>相比 Registry，Harbor 额外提供项目级 RBAC (可对接 LDAP / OIDC)、上游镜像代理缓存、漏洞扫描与镜像签名、保留策略和仓库间复制；代价是组件更多、资源开销更高，生产环境还需要外接 PostgreSQL 与 Redis。选型对比见 <a href="/lessons/repo">仓库服务</a>。</p>
+<p>本方案使用 Istio ingressgateway 替代 Nginx Ingress Controller 作为 Ingress 控制器，Harbor chart 原生支持 <code>ingressClassName</code>，无需额外自定义资源。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<p>访问 <a href="https://github.com/wutz/k8s-in-action/blob/main/repo/harbor/values.yml">values.yml</a> 文件，进行修改:</p>
+<ul>
+<li>
+<p>expose.type 选择访问模式（二选一）:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Ingress + TLS</th>
+<th>LoadBalancer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>适用</td>
+<td>域名 + HTTPS 访问</td>
+<td>IP 直连，内网简单使用</td>
+</tr>
+<tr>
+<td>expose.type</td>
+<td>ingress</td>
+<td>loadBalancer</td>
+</tr>
+<tr>
+<td>tls.enabled</td>
+<td>true</td>
+<td>false</td>
+</tr>
+<tr>
+<td>certSource</td>
+<td>secret</td>
+<td>-</td>
+</tr>
+<tr>
+<td>hosts.core</td>
+<td>域名 (如 <code>cr.mc01.example.com</code>)</td>
+<td>-</td>
+</tr>
+<tr>
+<td>externalURL</td>
+<td><code>https://cr.mc01.example.com</code></td>
+<td><code>http://&#x3C;LB-IP></code></td>
+</tr>
+<tr>
+<td>额外步骤</td>
+<td><code>kubectl apply -k .</code></td>
+<td>无</td>
+</tr>
+</tbody>
+</table>
+<p>externalURL 是 Harbor 的外部入口地址（写入 Core 的 <code>EXT_ENDPOINT</code>），docker login/push/pull 的回调重定向都依赖此值，必须与客户端实际访问地址一致</p>
+<ul>
+<li>Ingress 模式: <code>https://</code> + <code>hosts.core</code> 域名</li>
+<li>LoadBalancer 模式: <code>http://</code> + MetalLB 分配的 ExternalIP；如果 IP 未提前指定，先部署后获取:
+<code>kubectl get svc -n harbor harbor -o jsonpath='{.status.loadBalancer.ingress[0].ip}'</code>，然后更新 values.yml 再 <code>helmwave up --build</code></li>
+</ul>
+<p>Ingress + TLS 模式: <code>certSource: secret</code>，TLS Secret 必须在 <code>istio-system</code> namespace 创建（Istio 要求）</p>
+<ul>
+<li>生产环境: 向管理员申请域名和正式 TLS 证书，将证书文件放到 <code>tls/</code> 目录</li>
+<li>测试环境: 执行 <code>./tls/gen-cert.sh</code> 自动生成自签名证书</li>
+<li>部署证书: <code>kubectl apply -k .</code>（IngressClass + EnvoyFilter + TLS Secret）</li>
+</ul>
+<p>域名需同时配置到: <code>values.yml</code> 的 <code>expose.ingress.hosts.core</code> / <code>tls/gen-cert.sh</code> 的 <code>DOMAIN</code></p>
+<p>LoadBalancer 模式: MetalLB 分配 ExternalIP，流量直达 Harbor 内置 nginx，不经过 Istio，无需配置 IngressClass 和证书</p>
+</li>
+<li>
+<p>expose.ingress.className 设为 <code>istio</code>，对应 <code>istio/ingressclass.yaml</code> 中定义的 IngressClass</p>
+</li>
+<li>
+<p>persistence.persistentVolumeClaim.*.storageClass 配置集群存在的共享存储，以及大小</p>
+</li>
+<li>
+<p>database.type 需要修改为 external 用在生产环境中以及添加 external 对应连接信息；用在开发环境保持不变即可</p>
+</li>
+<li>
+<p>redis 修改等同于 database</p>
+</li>
+<li>
+<p>harborAdminPassword 配置管理员密码</p>
+</li>
+<li>
+<p>proxy: 可选，可以用于 harbor 作为 image proxy 使用</p>
+</li>
+</ul>
+<p>Ingress 模式需先应用 Istio 相关资源（LoadBalancer 模式跳过此步直接 helmwave）:</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># HTTPS 场景 — 测试环境: 先生成自签名证书</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 生产环境: 向管理员申请证书，放到 tls/ 目录 (tls.key + tls.crt)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./tls/gen-cert.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 一键部署 (IngressClass + EnvoyFilter + TLS Secret)</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Istio 要求 Ingress 的 TLS Secret 必须在 ingressgateway 的 namespace (istio-system) 中</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 参见: https://istio.io/latest/docs/tasks/traffic-management/ingress/kubernetes-ingress/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="已知问题">已知问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#已知问题">#</a></h2>
+<ul>
+<li>使用 image-syncer 同步镜像报错 <code>blob upload valid</code>，在 juicefs/nfs 等非强一致文件系统使用多实例 <code>harbor-registry</code> 会触发此问题</li>
+<li>缺省情况下，Harbor 支持的镜像单层 <code>layer</code> 最大为 128GB。<code>values.yml</code> 中已通过 <code>core.extraEnvVars</code> 将 <code>BEEGO_MAX_UPLOAD_SIZE_BYTES</code> 和 <code>BEEGO_MAX_MEMORY_BYTES</code> 调整为 500GiB，如需进一步调整修改对应值即可</li>
+<li><code>certSource=auto</code> 创建的 Secret 在 <code>harbor</code> namespace，Istio 找不到，HTTPS 不通；必须使用 <code>certSource=secret</code>，通过 <code>kubectl apply -k .</code> 在 <code>istio-system</code> 创建 Secret</li>
+<li>EnvoyFilter <code>harbor-upload-tuning</code> 作用于所有 ingressgateway 流量（不仅限 Harbor），多服务共用同一 ingressgateway 时需评估超时参数是否影响其他服务</li>
+</ul>
+<h2 id="提供镜像代理服务-可选">提供镜像代理服务 (可选)<a class="heading-anchor" aria-hidden tabindex="-1" href="#提供镜像代理服务-可选">#</a></h2>
+<ol>
+<li>选择<strong>仓库管理</strong>，然后<strong>新建目标</strong>, 选择提供者<strong>Docker Registry</strong>，并填写目标名（例如 <code>docker.io</code>/<code>gcr.io</code> 等),最后填写对应<strong>目标URL</strong>, 下面是目标名与目标URL的对应关系:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>目标名</th>
+<th>目标URL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>docker.io</td>
+<td><a href="https://mirror.gcr.io">https://mirror.gcr.io</a></td>
+</tr>
+<tr>
+<td>gcr.io</td>
+<td><a href="https://gcr.io">https://gcr.io</a></td>
+</tr>
+<tr>
+<td>ghcr.io</td>
+<td><a href="https://ghcr.io">https://ghcr.io</a></td>
+</tr>
+<tr>
+<td>k8s.gcr.io</td>
+<td><a href="https://k8s.gcr.io">https://k8s.gcr.io</a></td>
+</tr>
+<tr>
+<td>registry.k8s.io</td>
+<td><a href="https://registry.k8s.io">https://registry.k8s.io</a></td>
+</tr>
+<tr>
+<td>nvcr.io</td>
+<td><a href="https://nvcr.io">https://nvcr.io</a></td>
+</tr>
+<tr>
+<td>quay.io</td>
+<td><a href="https://quay.io">https://quay.io</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="使用harbor-命令行配置-registry-可选">使用harbor 命令行配置 Registry （可选）<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用harbor-命令行配置-registry-可选">#</a></h3>
+<ul>
+<li>
+<p>下载安装： <a href="https://github.com/goharbor/harbor-cli/releases">https://github.com/goharbor/harbor-cli/releases</a></p>
+</li>
+<li>
+<p>登陆私有 harbor</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">harbor</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://cr.mc01.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Harbor12345</span></span></code></pre>
+<ul>
+<li>批量创建 registry</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">for</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> registry</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> in</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> docker.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ghcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> k8s.gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry.k8s.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nvcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> quay.io</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">  url</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"https://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  [ </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2"> =</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "docker.io"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ] &#x26;&#x26; </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">url</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"https://mirror.gcr.io"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">  harbor</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> docker-registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --url</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$url</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span></code></pre>
+<ul>
+<li>查看 registry</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># harbor registry list</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">┌──────────────────────────────────────────────────────────────────────────────────────────────────────┐</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  ID</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    Name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">          Status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        Endpoint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> URL</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              Provider</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      Creation</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Time</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ────────────────────────────────────────────────────────────────────────────────────────────────────</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     docker.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://docker.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">         docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  3</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     ghcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://ghcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     k8s.gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://k8s.gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  5</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     registry.k8…</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://registry.k8s.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  6</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     nvcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://nvcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  7</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     quay.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       healthy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       https://quay.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           docker-regi…</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">└──────────────────────────────────────────────────────────────────────────────────────────────────────┘</span></span></code></pre>
+<ol>
+<li>在<strong>项目</strong>中，选择<strong>新建项目</strong>，填写项目名称 (例如, <code>docker.io</code>/<code>gcr.io</code> 等， 参见上表)，并设置<strong>公开</strong>, 最后开启<strong>镜像代理</strong>并选择对应<strong>目标</strong></li>
+</ol>
+<ul>
+<li>批量创建 project</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">harbor</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> json</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> jq</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '.Payload[] | "\(.id) \(.name)"'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD"> while</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> read</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> harbor</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> project</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --proxy-cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --public</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --registry-id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$id</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span></span></code></pre>
+<ul>
+<li>查看 project</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># harbor project list</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">┌──────────────────────────────────────────────────────────────────────────────────────────────────┐</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  ID</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    Project</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              Access</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Level</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      Type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">              Repo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Co…</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Creation</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Time</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ────────────────────────────────────────────────────────────────────────────────────────────────</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     docker.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                 public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  3</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                    public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     ghcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  5</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     k8s.gcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     library</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            project</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">           0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  7</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     nvcr.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  8</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     quay.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                   public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">│</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  6</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     registry.k8s.io</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">           public</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            proxy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cache</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">         0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> minute</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ago</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      │</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">└──────────────────────────────────────────────────────────────────────────────────────────────────┘</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

@@ -1,0 +1,225 @@
+<h1 id="gpfs-多租户">GPFS 多租户<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpfs-多租户">#</a></h1>
+<p>GPFS 支持 3 种粒度的多租户实现方案，分别适合不同的容量需求、CSI 支持要求和交付周期。</p>
+<h2 id="方案对比">方案对比<a class="heading-anchor" aria-hidden tabindex="-1" href="#方案对比">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>隔离粒度</th>
+<th>适用客户</th>
+<th>起步容量</th>
+<th>交付周期</th>
+<th>原生 GPFS CSI</th>
+<th>Metadata 隔离</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#%E6%AF%8F%E4%B8%AA%E7%A7%9F%E6%88%B7%E4%B8%80%E4%B8%AA%E5%AD%98%E5%82%A8%E9%9B%86%E7%BE%A4">每个租户一个存储集群</a></td>
+<td>物理集群</td>
+<td>容量需求大（500T 以上）、需要完善 CSI 支持的重要客户</td>
+<td>500T 以上</td>
+<td>3-7 天</td>
+<td>支持</td>
+<td>物理隔离</td>
+</tr>
+<tr>
+<td><a href="#%E6%AF%8F%E4%B8%AA%E7%A7%9F%E6%88%B7%E4%B8%80%E4%B8%AA%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">每个租户一个文件系统</a></td>
+<td>文件系统</td>
+<td>容量相对不大（50T 以上）、可接受第三方 CSI 的重要客户</td>
+<td>50T 起步/步长</td>
+<td>1 天以内</td>
+<td>需第三方工具</td>
+<td>共享磁盘，有竞争</td>
+</tr>
+<tr>
+<td><a href="#%E6%AF%8F%E4%B8%AA%E7%A7%9F%E6%88%B7%E4%B8%80%E4%B8%AA%E6%96%87%E4%BB%B6%E9%9B%86">每个租户一个文件集</a></td>
+<td>文件集 fileset</td>
+<td>任意容量、接受第三方 CSI、可接受元数据性能不稳定的中小客户</td>
+<td>任意</td>
+<td>0.5 天以内</td>
+<td>需第三方工具</td>
+<td>共享磁盘，竞争严重</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Scale 不支持对 Metadata IOPS 进行 QoS 限制，因此除物理集群隔离外，其余两种方案在多租户/多用户场景下均存在 Metadata 性能竞争，参见 <a href="/lessons/storage/gpfs/day-2-management#qos-%E7%AE%A1%E7%90%86">GPFS 管理 - QoS 管理</a>。</p>
+</blockquote>
+<h3 id="各方案优劣势">各方案优劣势<a class="heading-anchor" aria-hidden tabindex="-1" href="#各方案优劣势">#</a></h3>
+<h4 id="每个租户一个存储集群">每个租户一个存储集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个存储集群">#</a></h4>
+<ul>
+<li><strong>优势</strong>：性能完全物理隔离；提供的功能支持最完整。</li>
+<li><strong>劣势</strong>：
+<ul>
+<li>起步容量大（一般在 500T 以上），如果用户不需要这么多容量会导致容量空置；</li>
+<li>建设周期通常在 3-7 天，影响交付进度；</li>
+<li>此类存储集群过多后，导致交付人员严重不足。</li>
+</ul>
+</li>
+</ul>
+<h4 id="每个租户一个文件系统">每个租户一个文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个文件系统">#</a></h4>
+<ul>
+<li><strong>优势</strong>：
+<ul>
+<li>可以按照 50T 起步或步长来满足用户低容量需求；</li>
+<li>在存储集群已经建设好的情况下，交付周期通常在 1 天以内。</li>
+</ul>
+</li>
+<li><strong>劣势</strong>：
+<ul>
+<li>50T 步长仍然不能满足一些更低容量用户的需求；</li>
+<li>由于 GPFS 不支持 Metadata QoS，多个租户元数据服务共享相同底层磁盘，存在竞争磁盘情况；</li>
+<li>Quota 设置只能在拥有集群上设置，这依赖拥有集群管理员，通常是瓶颈，此时需要开发第三方工具来改善；</li>
+<li>GPFS GUI 的 CSI 权限不能按照 fs 纬度控制，导致不能直接使用原生 GPFS CSI，此时需要功能弱的第三方 CSI。</li>
+</ul>
+</li>
+</ul>
+<h4 id="每个租户一个文件集">每个租户一个文件集<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个文件集">#</a></h4>
+<ul>
+<li><strong>优势</strong>：
+<ul>
+<li>可以按照任意容量大小满足用户各种需求；</li>
+<li>在存储集群已经建设好的情况下，交付周期通常在 0.5 天以内。</li>
+</ul>
+</li>
+<li><strong>劣势</strong>：
+<ul>
+<li>root fileset 空间不隔离，可能导致用户误用或者滥用，可以设置 root fileset QoS 缓解；</li>
+<li>由于 GPFS 不支持 Metadata QoS，元数据性能存在竞争情况，特别是写类别性能基本多个租户间完全靠抢；</li>
+<li>Quota 设置只能在拥有集群上设置，这依赖拥有集群管理员，通常是瓶颈，此时需要开发第三方工具来改善；</li>
+<li>GPFS GUI 的 CSI 权限不能按照 fs 纬度控制，导致不能直接使用原生 GPFS CSI，此时需要功能弱的第三方 CSI。</li>
+</ul>
+</li>
+</ul>
+<h2 id="每个租户一个存储集群-1">每个租户一个存储集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个存储集群-1">#</a></h2>
+<p>适合容量需求大（500T 以上）、GPFS CSI 支持完善的重要客户。</p>
+<ol>
+<li>按照标准 GPFS 集群建设，使用 remote cluster 特性。每个租户拥有独立的存储集群（拥有集群），客户端集群（访问集群）通过 remote cluster 挂载。
+<ul>
+<li>存储集群部署参见 <a href="/lessons/storage/gpfs/day-1-deploy-ece">GPFS 存储集群部署</a></li>
+<li>客户端集群部署与远程挂载参见 <a href="/lessons/storage/gpfs/day-1-deploy-dme">GPFS 客户端集群部署与挂载</a></li>
+</ul>
+</li>
+<li>需要 GPFS CSI 时，分别在 2 个集群上各自安装 GPFS GUI 服务。
+<ul>
+<li>GUI 部署参见 <a href="/lessons/storage/gpfs/day-1-deploy-gui">GPFS GUI 部署</a></li>
+<li>CSI 部署参见 <a href="/lessons/storage/gpfs-csi">GPFS CSI</a></li>
+</ul>
+</li>
+</ol>
+<p>由于每个租户独享物理集群，性能完全隔离，且可直接使用原生 GPFS CSI（按集群纬度授权 GUI），功能支持最完整。</p>
+<h2 id="每个租户一个文件系统-1">每个租户一个文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个文件系统-1">#</a></h2>
+<p>适合容量相对不大（50T 以上）、能接受第三方 CSI 的重要客户。</p>
+<p>在同一个存储集群内，为每个租户创建独立的文件系统，通过 remote cluster 仅授权对应文件系统。</p>
+<h3 id="创建文件系统">创建文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建文件系统">#</a></h3>
+<p>受 GPFS ECE vdisk 512 个数量限制（参见 <a href="/lessons/storage/gpfs/day-0-concept">GPFS 概念 - vdisk set</a>），通常每个文件系统起步或者步长为 50T。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建元数据与数据混合的 vdisk set，每个 50T，需要更多容量时创建多个</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># --set-size 参数可以指定百分比（如：90%）也可以指定大小（如：50T）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmvdisk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> define</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1vs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --rg</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> RG1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --code</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 8+3P</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 4M</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --da</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> DA1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --nsd-usage</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dataAndMetadata</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --sp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> system</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --set-size</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 50T</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmvdisk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1vs1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmvdisk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用 vdisk set 创建租户需要的文件系统</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmvdisk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --vs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1vs1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --mmcrfs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -T</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /t1fs</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --auto-inode-limit</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --perfileset-quota</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --filesetdf</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -Q</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yes</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmmount</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>
+<blockquote>
+<p>需要更多容量时，定义并创建多个 50T 的 vdisk set，再通过 <code>mmvdisk filesystem add</code> 加入文件系统扩容，参见 <a href="/lessons/storage/gpfs/day-1-deploy-ece#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%89%A9%E7%BC%A9%E5%AE%B9">GPFS 存储集群部署 - 文件系统扩缩容</a>。</p>
+</blockquote>
+<h3 id="授权远程访问指定文件系统">授权远程访问指定文件系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#授权远程访问指定文件系统">#</a></h3>
+<p>设置 remote cluster 只允许访问指定 fs。在存储集群（拥有集群）上执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加租户客户端集群的 GPFS 公钥</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id_rsa.pub</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 仅授予该租户对 t1fs 文件系统的读写权限</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> grant</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rw</span></span></code></pre>
+<p>完整的远程挂载流程参见 <a href="/lessons/storage/gpfs/day-1-deploy-dme#%E8%BF%9C%E7%A8%8B%E6%8C%82%E8%BD%BD%E5%AD%98%E5%82%A8%E9%9B%86%E7%BE%A4%E7%9A%84%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">GPFS 客户端集群部署与挂载 - 远程挂载存储集群的文件系统</a>。</p>
+<h3 id="quota-设置">Quota 设置<a class="heading-anchor" aria-hidden tabindex="-1" href="#quota-设置">#</a></h3>
+<p>裸机使用设置 quota 时，需联系拥有集群管理员在拥有集群上设置（Quota 只能在拥有集群上设置）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 该租户独占整个文件系统（数据均在 root 文件集），对 root 文件集设置 quota 即可限制总用量</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置大小软限制 45T，硬限制 50T</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmsetquota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs:root</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --block</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 45T:50T</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlsquota</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -j</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fs</span></span></code></pre>
+<p>对 root 用户施加 quota 限制，只需在租户的客户端集群（访问集群）上执行，无需拥有集群管理员介入：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enforceFilesetQuotaOnRoot=yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span></span></code></pre>
+<blockquote>
+<p>如果在开启 <code>enforceFilesetQuotaOnRoot</code> 之前已经写入过数据，需要在拥有集群上执行 <code>mmcheckquota t1fs</code> 重新核算配额用量，否则已有用量统计不准，可能出现无法写入的情况。</p>
+</blockquote>
+<p>或借助第三方工具 <a href="https://github.com/wutz/mmapi">wutz/mmapi</a> 中的 <code>mmctl</code> 让租户自助设置（内测中）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> quota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ...</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> quota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ...</span></span></code></pre>
+<h3 id="k8s-csi-支持">k8s CSI 支持<a class="heading-anchor" aria-hidden tabindex="-1" href="#k8s-csi-支持">#</a></h3>
+<ul>
+<li>需要支持 k8s CSI 时，可以使用 <a href="https://github.com/rancher/local-path-provisioner">rancher/local-path-provisioner</a> 来满足需求，限制是不支持 quota 设置，具体使用参见本仓库 <a href="/lessons/storage/local-storage">storage/local-storage</a>（<code>shared-fs</code> storageClass）。</li>
+<li>如果需要原生 GPFS CSI 支持，由于 GPFS GUI 的 CSI 权限不能按 fs 纬度控制，需要借助第三方工具 <a href="https://github.com/wutz/mmapi">wutz/mmapi</a> 实现（内测中）。</li>
+</ul>
+<h2 id="每个租户一个文件集-1">每个租户一个文件集<a class="heading-anchor" aria-hidden tabindex="-1" href="#每个租户一个文件集-1">#</a></h2>
+<p>适合任意容量大小、接受第三方 CSI、元数据性能可能不稳定的中小客户。</p>
+<p>在同一个文件系统内，为每个租户创建独立的文件集 fileset，通过 remote cluster 仅授权对应文件系统下的指定文件集。</p>
+<h3 id="防止-root-fileset-滥用">防止 root fileset 滥用<a class="heading-anchor" aria-hidden tabindex="-1" href="#防止-root-fileset-滥用">#</a></h3>
+<p>root fileset 空间不隔离，可能导致用户误用或者滥用。需要设置 root fileset QoS 为 1，防止滥用：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启用 QoS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> filesystem</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 对 root fileset 设置极低 QoS，限制其直接使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0-root</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --fileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> throttle</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0-root</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --maxiops</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --maxmbs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> throttle</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span></span></code></pre>
+<h3 id="创建文件集并设置-quota-与-qos">创建文件集并设置 Quota 与 QoS<a class="heading-anchor" aria-hidden tabindex="-1" href="#创建文件集并设置-quota-与-qos">#</a></h3>
+<p>在存储集群（拥有集群）上执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建独立 inode 空间的 fileset</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmcrfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --inode-space</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> new</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlinkfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -J</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /fs0/t1fset</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlsfileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 fileset quota（大小软限制 95G，硬限制 100G；文件软限制 95K，硬限制 100K）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmsetquota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0:t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --block</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 95G:100G</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --files</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 95K:100K</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmlsquota</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -j</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 fileset QoS，限制该租户元数据/数据 IOPS 与带宽</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0-t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --fileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> throttle</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --class</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0-t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --maxiops</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1000</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --maxmbs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 100</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmqos</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> throttle</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span></span></code></pre>
+<p>对 root 用户施加 fileset quota 限制，只需在租户的客户端集群（访问集群）上执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enforceFilesetQuotaOnRoot=yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span></span></code></pre>
+<blockquote>
+<ul>
+<li>如果在开启 <code>enforceFilesetQuotaOnRoot</code> 之前已经写入过数据，需要在拥有集群上执行 <code>mmcheckquota fs0</code> 重新核算配额用量，否则已有用量统计不准，可能出现无法写入的情况。</li>
+<li>由于 GPFS 不支持 Metadata QoS，元数据性能存在竞争情况，特别是写类别性能基本多个租户间完全靠抢。</li>
+</ul>
+</blockquote>
+<h3 id="授权远程访问指定文件集">授权远程访问指定文件集<a class="heading-anchor" aria-hidden tabindex="-1" href="#授权远程访问指定文件集">#</a></h3>
+<p>设置 remote cluster 只允许访问指定 fs 的 fileset。GPFS 通过传统的 <code>mmauth</code> 命令提供远程文件集访问控制（Remote Fileset Access Control），可定义远程集群在单个文件系统命名空间内能访问哪些文件集（参见 <a href="/lessons/storage/gpfs/day-0-concept">GPFS 概念</a>）。</p>
+<blockquote>
+<ul>
+<li>root fileset 根文件集的内容对所有客户端集群<strong>始终可见/可访问</strong>。</li>
+<li>配额和快照仅对授权的文件集可见，而非文件系统中所有文件集。</li>
+</ul>
+</blockquote>
+<p>在存储集群（拥有集群）上执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加租户客户端集群的 GPFS 公钥</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> id_rsa.pub</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 仅授予该租户对文件系统 fs0 下文件集 t1fset 的读写权限</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># --filesets 可指定多个文件集（逗号分隔），未授权的文件集对该租户不可见</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> grant</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --filesets</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rw</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看授权情况</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> show</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span></span></code></pre>
+<p>如需调整或撤销对某个文件集的访问：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 撤销该租户对文件集 t1fset 的访问</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmauth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deny</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tenant1.example.com</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --filesets</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> t1fset</span></span></code></pre>
+<p>完整的远程挂载流程参见 <a href="/lessons/storage/gpfs/day-1-deploy-dme#%E8%BF%9C%E7%A8%8B%E6%8C%82%E8%BD%BD%E5%AD%98%E5%82%A8%E9%9B%86%E7%BE%A4%E7%9A%84%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">GPFS 客户端集群部署与挂载 - 远程挂载存储集群的文件系统</a>。</p>
+<h3 id="quota-设置-1">Quota 设置<a class="heading-anchor" aria-hidden tabindex="-1" href="#quota-设置-1">#</a></h3>
+<p>裸机使用设置 quota 时，需联系拥有集群管理员（Quota 只能在拥有集群上设置），或借助第三方工具 <a href="https://github.com/wutz/mmapi">wutz/mmapi</a> 中的 <code>mmctl</code>（开发中）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fileset</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ...</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> quota</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ...</span></span></code></pre>
+<h3 id="k8s-csi-支持-1">k8s CSI 支持<a class="heading-anchor" aria-hidden tabindex="-1" href="#k8s-csi-支持-1">#</a></h3>
+<ul>
+<li>需要支持 k8s CSI 时，可以使用 <a href="https://github.com/rancher/local-path-provisioner">rancher/local-path-provisioner</a> 来满足需求，限制是不支持 quota 设置，具体使用参见本仓库 <a href="/lessons/storage/local-storage">storage/local-storage</a>（<code>shared-fs</code> storageClass）。</li>
+<li>如果需要原生 GPFS CSI 支持，由于 GPFS GUI 的 CSI 权限不能按 fs 纬度控制，需要借助第三方工具 <a href="https://github.com/wutz/mmapi">wutz/mmapi</a> 实现（开发中）。</li>
+</ul>

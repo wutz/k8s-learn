@@ -1,0 +1,191 @@
+<h1 id="weka-部署">Weka 部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#weka-部署">#</a></h1>
+<h2 id="bios-设置">BIOS 设置<a class="heading-anchor" aria-hidden tabindex="-1" href="#bios-设置">#</a></h2>
+<ul>
+<li>关闭 CPU 省电模式
+<ul>
+<li>Procesor Configuration
+<ul>
+<li>Power Management
+<ul>
+<li>P States
+<ul>
+<li>Speed Step: Disabled</li>
+</ul>
+</li>
+<li>C States
+<ul>
+<li>C1E: Disabled</li>
+<li>Enable Monitor MWAIT: Disabled</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>关闭 IOMMU
+<ul>
+<li>IIO Configuration
+<ul>
+<li>Intel VT for Directed I/O: Disabled</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>关闭超线程
+<ul>
+<li>Procesor Configuration
+<ul>
+<li>Hyper-Threading/ Enable LP[Global] : Disabled</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="部署-wsa">部署 WSA<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-wsa">#</a></h2>
+<ul>
+<li>WSA 包含 RockyLinux，MLNX 驱动和 Weka 软件包等，部署方式类似于 RockyLinux 安装</li>
+<li>部署时只修改, 不要修改其它选项避免问题：
+<ul>
+<li>安装位置</li>
+<li>主机名</li>
+</ul>
+</li>
+<li>等待其部署完成自行重启完成</li>
+<li>OS 启动后使用 <code>nmtui</code> 配置初始网络，以方便 ssh 访问进来</li>
+</ul>
+<h2 id="配置系统">配置系统<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置系统">#</a></h2>
+<h3 id="调整分区大小">调整分区大小<a class="heading-anchor" aria-hidden tabindex="-1" href="#调整分区大小">#</a></h3>
+<p>缺省安装后，大量空间倍分配给 <code>/home</code> 目录，导致 <code>/</code> 目录空间不足，需要调整分区大小</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">rsync</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -avP</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /home/weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">umount</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /home</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">lvremove</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/mapper/wr-home</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">swapoff</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">lvremove</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/mapper/wr-swap</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab.bak</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sed</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/.*swap.*/#&#x26;/'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sed</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's/.*home.*/#&#x26;/'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">lvextend</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> +100%FREE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/mapper/wr-root</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">xfs_growfs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/mapper/wr-root</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">rsync</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -avP</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/weka</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /home</span></span></code></pre>
+<h3 id="配置网络">配置网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置网络">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 /etc/hosts</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/hosts</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">10.254.41.4 sn-10-254-41-4</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">...</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">10.254.41.9 sn-10-254-41-10</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 准备 pdsh hosts file</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> srv</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">sn-10-254-41-[4-9]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> PDSH_RCMD_TYPE</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ssh</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> PDSH_SSH_ARGS</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"-o StrictHostKeyChecking=no"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hostname</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 更新网卡固件参数</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "mst start"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'for MLXDEV in /dev/mst/* ; do mlxconfig -d ${MLXDEV} -y set ADVANCED_PCI_SETTINGS=1 PCI_WR_ORDERING=1; done'</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "mlxconfig -d /dev/mst/mt4123_pciconf0 q |grep -e ADVANCED_PCI_SETTINGS -e PCI_WR_ORDERING"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "mlxconfig -d /dev/mst/mt4123_pciconf1 q |grep -e ADVANCED_PCI_SETTINGS -e PCI_WR_ORDERING"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> reboot</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 修改 NetworkManger 配置增加 ignore-carrier=*</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">vim</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/NetworkManager/NetworkManager.conf</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[main]</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#plugins=ifcfg-rh</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ignore-carrier</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">*</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">---</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/NetworkManager/NetworkManager.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NetworkManager.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/NetworkManager</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置 arp filter</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 80-arp.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.all.arp_filter = 1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.default.arp_filter = 1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.all.arp_announce = 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.default.arp_announce = 2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.all.arp_ignore = 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.conf.default.arp_ignore = 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 80-arp.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/sysctl.d/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sysctl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --system</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加 table</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/iproute2/rt_tables</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">300        net300</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">301        net301</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/iproute2/rt_tables</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rt_tables</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/iproute2/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 IP &#x26; Route &#x26; Rule</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#!/bin/bash</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -x</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> host</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">hostname</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> seq</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">host</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">##*</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">-</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># CHANGE ME</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> CONFIGS</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;-</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">10.251.12.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$seq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond1 ens3 300</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">10.251.13.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$seq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond2 ens6 301</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> NET</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"10.251.12.0"</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> NETMASK</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">22</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">readonly</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> GATEWAY</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">10.251.15.254</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">while</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> read</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> iface</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> table</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">; </span><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">do</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> con-name</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ifname</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond.options</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "mode=802.3ad,xmit_hash_policy=layer3+4"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond-slave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> con-name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">iface</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">f0np0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ifname</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">iface</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">f0np0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> master</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> type</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bond-slave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> con-name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">iface</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">f1np1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ifname</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">iface</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">f1np1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> master</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> modify</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		autoconnect</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.method</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> manual</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.addresses</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ip</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">NETMASK</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">} </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">\</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.gateway</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $GATEWAY</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.never-default</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv6.method</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> disabled</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ethernet.mtu</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 9000</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> modify</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.routes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$NET</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">NETMASK</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">} src=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$ip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> table=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$table</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">		ipv4.routing-rules</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "priority </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$table</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> from </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$ip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> table </span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$table</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">	nmcli</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> connection</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $bond</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">done</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$CONFIGS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 更新 NTP</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "sed -i 's/^pool.*/pool ntp.aliyun.com iburst/g' /etc/chrony.conf"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --now</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> chronyd</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> chronyc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sources</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> timedatectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set-timezone</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Asia/Shanghai</span></span></code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># check</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yum</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> iperf3</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /opt/tools/install</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 网络测试</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekanetperf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 10.251.12.{4..9}</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekanetperf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 10.251.13.{4..9}</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># checker</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekachecker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 10.251.12.{4..9}</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekachecker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 10.251.13.{4..9}</span></span></code></pre>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清空盘</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "echo /dev/nvme{0..23}n1 |xargs -n1 blkdiscard"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 准备部署</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /opt/tools/install</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 根据环境生成部署脚本。如果节点不全，需要重新执行一下</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 如果wekaconfig执行失败，出现Unable to parse lscpu output - TPC not found错误。请将LANG设置为en_US.UTF-8</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekaconfig</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署, ssh 无密码 hostname 必须已经接受 host key</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-[4-9]</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> hostname</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./config.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载整个集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./wekadestroy</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --yes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --force</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --uninstall</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sn-10-254-41-{4..9}</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重新安装 weka 包</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^srv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "cd /opt/weka-4.4.6.122/ &#x26;&#x26; ./install.sh"</span></span></code></pre>
+<h2 id="访问">访问<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问">#</a></h2>
+<p>访问 <a href="http://10.254.41.5:140000">http://10.254.41.5:140000</a> 然后使用 <code>admin/admin</code> 登录</p>

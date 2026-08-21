@@ -1,0 +1,67 @@
+<h1 id="部署-kamaji-console">部署 kamaji-console<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-kamaji-console">#</a></h1>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji-console.yaml</span></span></code></pre>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<ol>
+<li>
+<p><strong>Replace Placeholders with Actual Values</strong>:</p>
+<ul>
+<li>Edit <code>kamaji-console.yaml</code> (or create a separate Secret YAML for better security).</li>
+<li>Provide real values for each field (e.g., a URL for <code>NEXTAUTH_URL</code>, a strong random string for <code>JWT_SECRET</code>, etc.).</li>
+<li>Encode each value in base64 before inserting it into the YAML.</li>
+</ul>
+<p>Example commands to generate and encode values (on macOS/Linux):</p>
+<ul>
+<li>For <code>NEXTAUTH_URL</code> (e.g., assuming "<a href="https://console.example.com/ui">https://console.example.com/ui</a>"):</li>
+</ul>
+</li>
+</ol>
+<pre><code>echo -n 'http://192.168.3.103/ui' | base64
+</code></pre>
+<pre><code> Output: Something like `aHR0cHM6Ly9jb25zb2xlLmV4YW1wbGUuY29tL3Vp`
+</code></pre>
+<ul>
+<li>For <code>JWT_SECRET</code> (generate a secure random one):</li>
+</ul>
+<pre><code>openssl rand -base64 32 | tr -d '\n' | base64  # Double-encode if needed, but single base64 is fine
+</code></pre>
+<pre><code> Use the output directly.
+</code></pre>
+<ul>
+<li>For <code>ADMIN_EMAIL</code> (e.g., "<a href="mailto:admin@example.com">admin@example.com</a>"):</li>
+</ul>
+<pre><code>echo -n 'admin@example.com' | base64
+</code></pre>
+<ul>
+<li>For <code>ADMIN_PASSWORD</code> (use a strong password, e.g., generate with <code>openssl rand -hex 16</code>):</li>
+</ul>
+<pre><code>echo -n 'your-strong-password' | base64
+</code></pre>
+<p>Update the <code>data</code> section in the YAML to look like this (with your encoded values):</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Secret</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kamaji-console</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kamaji-system</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # Adjust if needed</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">type</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Opaque</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">data</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  NEXTAUTH_URL</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">&#x3C;base64-encoded-url></span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">  # e.g., aHR0cHM6Ly9jb25zb2xlLmV4YW1wbGUuY29tL3Vp</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  JWT_SECRET</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">&#x3C;base64-encoded-secret></span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  ADMIN_EMAIL</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">&#x3C;base64-encoded-email></span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  ADMIN_PASSWORD</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">&#x3C;base64-encoded-password></span></span></code></pre>
+<ol start="2">
+<li><strong>Apply the Updated YAML</strong>:
+<ul>
+<li>Run <code>kubectl apply -f kamaji-console.yaml</code> again.</li>
+<li>If the Secret is already partially created, you might need to delete it first: <code>kubectl delete secret kamaji-console -n kamaji-system</code> (replace namespace if different).</li>
+</ul>
+</li>
+</ol>
+<h3 id="best-practices">Best Practices<a class="heading-anchor" aria-hidden tabindex="-1" href="#best-practices">#</a></h3>
+<ul>
+<li><strong>Don't Commit Secrets to Git</strong>: Avoid storing real encoded values in version control. Use tools like <code>kubectl create secret generic kamaji-console --from-literal=NEXTAUTH_URL=https://console.example.com/ui --from-literal=JWT_SECRET=your-secret --dry-run=client -o yaml > secret.yaml</code> to generate the Secret YAML dynamically, then apply it separately.</li>
+<li><strong>Use Helm for Installation</strong>: As mentioned before, the official way to install Kamaji Console is via Helm (<code>helm install kamaji-console clastix/kamaji-console --namespace kamaji-system --create-namespace</code>), which handles Secret creation and allows you to set values securely via <code>--set</code> flags (e.g., <code>--set console.nextauthUrl=https://console.example.com/ui</code>).</li>
+<li><strong>Verify After Apply</strong>: Check the Secret with <code>kubectl get secret kamaji-console -n kamaji-system -o yaml</code> (values will show as base64). Then, ensure the Deployment pods are running: <code>kubectl get pods -n kamaji-system</code>.</li>
+</ul>
+<p>If you share your updated YAML (with sensitive parts redacted), I can help debug further!</p>

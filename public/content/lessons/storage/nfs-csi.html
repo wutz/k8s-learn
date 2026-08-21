@@ -1,0 +1,61 @@
+<h1 id="nfs-csi">NFS CSI<a class="heading-anchor" aria-hidden tabindex="-1" href="#nfs-csi">#</a></h1>
+<p><a href="https://github.com/kubernetes-csi/csi-driver-nfs">csi-driver-nfs</a> 是一个 Kubernetes CSI 驱动，用于挂载 NFS 共享目录。</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ul>
+<li>部署 NFS CSI</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<ul>
+<li>
+<p>部署 storageclass</p>
+<p>假设 NFS Server 在 test1.vast1.bz1.paratera.com，共享目录为 /dev1/fs1, 把这些信息配置在 shared-nfs.yaml 中</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 把 k8s 使用目录放在独立的子目录 /dev1/fs1/volumes 下</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev1/fs1/volumes</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> shared-nfs.yaml</span></span></code></pre>
+<blockquote>
+<p>如果使用多个 NFS 则重复上述步骤</p>
+</blockquote>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署测试用例</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待部署 pod 运行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> po</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 进入 pod 观察 nfs 是否挂载以及正常读写</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deployment-nfs-xxxxx-xxx</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bash</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清理测试用例</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yml</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> shared-nfs.yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<h2 id="如果没有-nfs-server-可以自行搭建不建议用于生产环境">如果没有 NFS Server 可以自行搭建（不建议用于生产环境）<a class="heading-anchor" aria-hidden tabindex="-1" href="#如果没有-nfs-server-可以自行搭建不建议用于生产环境">#</a></h2>
+<ul>
+<li>
+<p>搭建 NFS Server</p>
+<ul>
+<li>创建 RAID 设备。如果使用多块本地磁盘，可以创建软 RAID，参考 <a href="https://ruan.dev/blog/2022/06/29/create-a-raid5-array-with-mdadm-on-linux">https://ruan.dev/blog/2022/06/29/create-a-raid5-array-with-mdadm-on-linux</a></li>
+<li>创建 NFS Server。参考 <a href="https://www.digitalocean.com/community/tutorials/how-to-set-up-an-nfs-mount-on-ubuntu-22-04">https://www.digitalocean.com/community/tutorials/how-to-set-up-an-nfs-mount-on-ubuntu-22-04</a></li>
+</ul>
+</li>
+<li>
+<p>销毁 NFS &#x26; MDRAID</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 停止 NFS Server</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> disable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nfs-server-kernel</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --now</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 停止 MDRAID</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">df</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -h</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">umount</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/md0</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mdadm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --detail</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/md0</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mdadm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -S</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/md0</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 删除 MDRAID</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mdadm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --zero-superblock</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/nvme0n1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mdadm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --zero-superblock</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/nvme1n1</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">...</span></span></code></pre>

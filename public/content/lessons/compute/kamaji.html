@@ -1,0 +1,67 @@
+<h1 id="kamaji"><a href="https://github.com/clastix/kamaji">Kamaji</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#kamaji">#</a></h1>
+<p>Kamaji 是一个 Kubernetes Control Plane Manager，基于 Hosted Control Plane 概念，将 Kubernetes 控制平面组件作为 Pod 运行在管理集群中，而非独立机器上。通过这种方式，可以在单个管理集群中部署和管理多个租户 Kubernetes 控制平面，实现资源共享和优化利用。</p>
+<h2 id="核心特性">核心特性<a class="heading-anchor" aria-hidden tabindex="-1" href="#核心特性">#</a></h2>
+<ul>
+<li><strong>快速部署</strong>：租户控制平面可在 16 秒内启动</li>
+<li><strong>快速升级</strong>：Kubernetes 版本升级仅需 10 秒</li>
+<li><strong>资源优化</strong>：通过 Datastore 解耦节省高达 60% 的硬件资源</li>
+<li><strong>多租户隔离</strong>：在单个管理集群内部署多个独立的 Kubernetes 控制平面</li>
+<li><strong>CNCF 合规</strong>：提供完全符合 CNCF 标准的 Kubernetes 集群</li>
+<li><strong>上游兼容</strong>：使用未修改的上游 Kubernetes 组件</li>
+</ul>
+<h2 id="架构说明">架构说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#架构说明">#</a></h2>
+<p>Kamaji 由以下核心组件构成：</p>
+<ul>
+<li><strong>Kamaji Operator</strong>：管理租户控制平面的生命周期</li>
+<li><strong>Tenant Control Plane</strong>：作为 Pod 运行的租户 Kubernetes 控制平面</li>
+<li><strong>Datastore</strong>：存储租户集群状态，支持 etcd、MySQL、PostgreSQL、NATS 等</li>
+<li><strong>Konnectivity</strong>：提供管理集群与租户工作节点之间的网络连接</li>
+</ul>
+<h2 id="准备工作">准备工作<a class="heading-anchor" aria-hidden tabindex="-1" href="#准备工作">#</a></h2>
+<ul>
+<li>一个运行中的 Kubernetes 集群作为管理集群（推荐 v1.30+）</li>
+<li>kubectl 已配置并可访问管理集群</li>
+<li>helmwave 已安装（推荐方式）或 Helm 4.x</li>
+<li>准备 Datastore 后端（可选，默认使用内置 etcd）</li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/network/cert-manager/README.md">cert-manager</a> 已安装</li>
+<li><a href="/lessons/storage/local-storage">local-storage</a> 已安装</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<h3 id="使用-helmwave-安装">使用 helmwave 安装<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-helmwave-安装">#</a></h3>
+<p>安装 Gateway API CRD：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --server-side</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crds-gateway-api</span></span></code></pre>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/compute/kamaji/values.yaml">values.yaml</a> 根据实际环境配置参数，然后执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 构建并部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证部署</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji-system</span></span></code></pre>
+<h3 id="验证安装">验证安装<a class="heading-anchor" aria-hidden tabindex="-1" href="#验证安装">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 Kamaji Operator 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji-system</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 CRD 是否安装</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crd</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kamaji</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 应该看到：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># tenantcontrolplanes.kamaji.clastix.io</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># datastores.kamaji.clastix.io</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查 Gateway API CRD 是否安装（Kamaji 需要）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> crd</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway.networking.k8s.io</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 应该看到 TLSRoute 等 Gateway API CRD</span></span></code></pre>
+<h2 id="部署示例租户集群">部署示例租户集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署示例租户集群">#</a></h2>
+<ul>
+<li><a href="/lessons/compute/kamaji/examples/mycluster">mycluster</a></li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<h3 id="删除示例租户集群">删除示例租户集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#删除示例租户集群">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://github.com/clastix/kamaji/examples/mycluster</span></span></code></pre>
+<h3 id="卸载-kamaji">卸载 Kamaji<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载-kamaji">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<h2 id="参考资源">参考资源<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考资源">#</a></h2>
+<ul>
+<li><a href="https://kamaji.clastix.io/">Kamaji 官方文档</a></li>
+<li><a href="https://github.com/clastix/kamaji">GitHub 仓库</a></li>
+<li><a href="https://kamaji.clastix.io/reference/api/">API 参考</a></li>
+<li><a href="https://github.com/clastix/cluster-api-control-plane-provider-kamaji">Cluster API Provider</a></li>
+</ul>

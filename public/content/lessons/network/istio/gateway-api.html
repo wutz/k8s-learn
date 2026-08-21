@@ -1,0 +1,182 @@
+<h1 id="gateway-api-部署指南">Gateway API 部署指南<a class="heading-anchor" aria-hidden tabindex="-1" href="#gateway-api-部署指南">#</a></h1>
+<blockquote>
+<p>✅ <strong>推荐方案</strong>: 这是 Kubernetes 官方推荐的下一代流量管理 API。</p>
+<p><strong>与 <a href="/lessons/network/istio/ingress">../ingress/</a> 的关系</strong>:</p>
+<ul>
+<li><code>ingress/</code> 使用 Kubernetes Ingress API（旧方案），保留用于过渡期参考</li>
+<li><code>gateway-api/</code> 使用 Gateway API（新标准），<strong>推荐新服务使用</strong></li>
+<li>POC 验证结论：Gateway API 可完全替代 Ingress API</li>
+</ul>
+<p>功能对比详见下文。</p>
+</blockquote>
+<hr>
+<p>Gateway API 是 Kubernetes 官方的下一代流量管理 API，相比 Ingress API 提供更丰富的功能和更好的可扩展性。</p>
+<h2 id="前置条件">前置条件<a class="heading-anchor" aria-hidden tabindex="-1" href="#前置条件">#</a></h2>
+<ul>
+<li>Istio 已部署 (参考 <a href="/lessons/network/istio">../README.md</a>)</li>
+<li>Gateway API CRDs 已安装 (Istio 部署时自动安装)</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<h2 id="配置说明">配置说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置说明">#</a></h2>
+<h3 id="gateway">Gateway<a class="heading-anchor" aria-hidden tabindex="-1" href="#gateway">#</a></h3>
+<p>定义网关监听器，支持多域名、多协议：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gateway.networking.k8s.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Gateway</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">main-gateway</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">istio-system</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  gatewayClassName</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">istio</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  listeners</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">http</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    hostname</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"*.example.com"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    port</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">80</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    protocol</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">HTTP</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    allowedRoutes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      namespaces</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        from</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Selector</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        selector</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">          matchLabels</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            gateway-access</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">main-gateway</span></span></code></pre>
+<h3 id="httproute">HTTPRoute<a class="heading-anchor" aria-hidden tabindex="-1" href="#httproute">#</a></h3>
+<p>定义路由规则，支持路径匹配、Header 匹配、流量分割等：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gateway.networking.k8s.io/v1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">HTTPRoute</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-app</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-namespace</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  parentRefs</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">main-gateway</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    namespace</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">istio-system</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  hostnames</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"my-app.example.com"</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  rules</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">backendRefs</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-app</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      port</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">80</span></span></code></pre>
+<h2 id="使用示例">使用示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用示例">#</a></h2>
+<h3 id="1-为命名空间添加标签">1. 为命名空间添加标签<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-为命名空间添加标签">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> namespace</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> my-namespace</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway-access=main-gateway</span></span></code></pre>
+<h3 id="2-部署应用和-httproute">2. 部署应用和 HTTPRoute<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-部署应用和-httproute">#</a></h3>
+<p>参考 <a href="https://github.com/wutz/k8s-in-action/blob/main/network/istio/gateway-api/tests.yaml">tests.yaml</a> 中的示例。</p>
+<h3 id="3-测试访问">3. 测试访问<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-测试访问">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 Gateway 地址</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">GATEWAY_HOST</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> main-gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.addresses[0].value}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试访问</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -HHost:my-app.example.com</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "http://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$GATEWAY_HOST</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span></code></pre>
+<h2 id="功能特性">功能特性<a class="heading-anchor" aria-hidden tabindex="-1" href="#功能特性">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>支持状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP 路由</td>
+<td>✅</td>
+<td>Path/Header 匹配</td>
+</tr>
+<tr>
+<td>URL 重写</td>
+<td>✅</td>
+<td>前缀/完整路径重写</td>
+</tr>
+<tr>
+<td>TLS 终止</td>
+<td>✅</td>
+<td>HTTPS 证书管理</td>
+</tr>
+<tr>
+<td>多域名路由</td>
+<td>✅</td>
+<td>多域名隔离</td>
+</tr>
+<tr>
+<td>Headers 操作</td>
+<td>✅</td>
+<td>添加/删除请求头、响应头</td>
+</tr>
+<tr>
+<td>超时控制</td>
+<td>✅</td>
+<td>请求超时配置</td>
+</tr>
+<tr>
+<td>流量分割</td>
+<td>✅</td>
+<td>加权流量路由</td>
+</tr>
+<tr>
+<td>重试机制</td>
+<td>⚠️</td>
+<td>需要 EnvoyFilter 扩展</td>
+</tr>
+</tbody>
+</table>
+<h2 id="对比-ingress-api">对比 Ingress API<a class="heading-anchor" aria-hidden tabindex="-1" href="#对比-ingress-api">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>Ingress</th>
+<th>Gateway API</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路由规则</td>
+<td>注解 + IngressRule</td>
+<td>HTTPRoute CRD</td>
+</tr>
+<tr>
+<td>多命名空间</td>
+<td>不支持</td>
+<td>✅ 支持</td>
+</tr>
+<tr>
+<td>流量分割</td>
+<td>不支持</td>
+<td>✅ 支持</td>
+</tr>
+<tr>
+<td>Headers 操作</td>
+<td>注解</td>
+<td>✅ 原生支持</td>
+</tr>
+<tr>
+<td>可扩展性</td>
+<td>差</td>
+<td>✅ 好</td>
+</tr>
+<tr>
+<td>角色分离</td>
+<td>差</td>
+<td>✅ 好</td>
+</tr>
+</tbody>
+</table>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 获取 Gateway 地址</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">GATEWAY_HOST</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> istio-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> main-gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.addresses[0].value}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试 HTTP 路由</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -s</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -I</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -HHost:httpbin.example.com</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "http://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$GATEWAY_HOST</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/status/200"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清理</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .</span></span></code></pre>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://gateway-api.sigs.k8s.io/">Gateway API 官方文档</a></li>
+<li><a href="https://istio.io/latest/docs/tasks/traffic-management/ingress/gateway-api/">Istio Gateway API 支持</a></li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/network/istio/poc-gateway-api/results/poc-results.md">POC 验证结果</a></li>
+</ul>

@@ -1,0 +1,146 @@
+<h1 id="kubeflow-trainer">Kubeflow Trainer<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubeflow-trainer">#</a></h1>
+<p><a href="https://github.com/kubeflow/trainer">Kubeflow Trainer</a> 是 Kubeflow 的分布式训练控制器，提供统一的 CRD <code>TrainJob</code> 和 <code>TrainingRuntime</code> 抽象，支持 PyTorch / MPI / Jax / PaddlePaddle 训练框架，简化多节点训练任务编排。</p>
+<p><strong>核心能力</strong>：</p>
+<ul>
+<li>统一的 CRD 抽象（<code>TrainJob</code> + <code>TrainingRuntime</code>），屏蔽 PyTorchJob / MPIJob 等底层差异</li>
+<li>原生支持 Gang 调度（通过 Kueue / Volcano / scheduler-plugins）</li>
+<li>自动注入分布式训练环境变量（rank / world_size / master_addr 等）</li>
+<li>Jobset-based 多副本管理（launcher / worker 分离）</li>
+</ul>
+<p>本目录包含 Trainer v2.2.0 的 Helm 部署配置和生产级示例（<code>examples/</code>）。</p>
+<h2 id="依赖">依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#依赖">#</a></h2>
+<h3 id="必需">必需<a class="heading-anchor" aria-hidden tabindex="-1" href="#必需">#</a></h3>
+<ul>
+<li>Kubernetes 1.27+</li>
+<li>NVIDIA GPU Operator（或等效的 GPU device plugin）</li>
+</ul>
+<h3 id="调度器三选一默认推荐-kueue">调度器（三选一，默认推荐 Kueue）<a class="heading-anchor" aria-hidden tabindex="-1" href="#调度器三选一默认推荐-kueue">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>调度器</th>
+<th>推荐场景</th>
+<th>部署目录</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Volcano （默认）</strong></td>
+<td>多租户优先级抢占、公平调度</td>
+<td><a href="/lessons/ai/volcano"><code>../volcano/</code></a></td>
+</tr>
+<tr>
+<td>Kueue</td>
+<td>多租户配额控制、作业排队</td>
+<td><a href="/lessons/ai/kueue"><code>../kueue/</code></a></td>
+</tr>
+<tr>
+<td>scheduler-plugins</td>
+<td>基础验证、快速测试（生产勿用）</td>
+<td><a href="/lessons/ai/scheduler-plugins"><code>../scheduler-plugins/</code></a></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>本 README 假设已部署 Volcano，其他调度器见 <code>examples/&#x3C;示例>/kueue/</code> 或 <code>examples/&#x3C;示例>/scheduler-plugins/</code> 子目录。</p>
+</blockquote>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<p>部署到 <code>kubeflow-system</code> namespace，包含：</p>
+<ul>
+<li>Trainer controller manager（2 副本 HA）</li>
+<li>内置 TrainingRuntime CRD（torch-distributed / mpi / jax / paddle）</li>
+</ul>
+<p>验证部署：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow-system</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubeflow-trainer-trainer-controller-manager</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainingruntimes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> default</span></span></code></pre>
+<h2 id="快速验证">快速验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#快速验证">#</a></h2>
+<p>部署后跑一个极简示例：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># PyTorch 单节点 1 GPU</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> examples/pytorch-simple.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/trainjob-name=pytorch-simple-train</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># MPI 单节点 1 GPU</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> examples/mpi-simple.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/replicated-job-name=launcher</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span></span></code></pre>
+<p>输出 <code>Hello from rank X</code> 即部署正常。</p>
+<h2 id="示例">示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#示例">#</a></h2>
+<h3 id="极简语法示例教学用途">极简语法示例（教学用途）<a class="heading-anchor" aria-hidden tabindex="-1" href="#极简语法示例教学用途">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>示例</th>
+<th>用途</th>
+<th>文件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>pytorch-simple</td>
+<td>PyTorch 单节点 1 GPU 最小化示例</td>
+<td><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/trainer/examples/pytorch-simple.yaml">pytorch-simple.yaml</a></td>
+</tr>
+<tr>
+<td>mpi-simple</td>
+<td>MPI 单节点 1 GPU 最小化示例</td>
+<td><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/trainer/examples/mpi-simple.yaml">mpi-simple.yaml</a></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>这两个示例无调度器变种（仅默认调度器），用于理解 TrainJob 语法。</p>
+</blockquote>
+<h3 id="实战测试示例生产级">实战测试示例（生产级）<a class="heading-anchor" aria-hidden tabindex="-1" href="#实战测试示例生产级">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>示例</th>
+<th>用途</th>
+<th>调度器支持</th>
+<th>目录</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>nvbandwidth</strong></td>
+<td>GPU 内存带宽和延迟测试（每节点独立）</td>
+<td>kueue / volcano / scheduler-plugins</td>
+<td><a href="/lessons/ai/trainer/examples/nvbandwidth">nvbandwidth/</a></td>
+</tr>
+<tr>
+<td><strong>pytorch-megatron</strong></td>
+<td>Megatron-LM GPT 训练（单节点 / 多节点 RoCE）</td>
+<td>kueue / volcano / scheduler-plugins</td>
+<td><a href="/lessons/ai/trainer/examples/pytorch-megatron">pytorch-megatron/</a></td>
+</tr>
+</tbody>
+</table>
+<p>每个示例包含三调度器目录（<code>kueue/</code> / <code>volcano/</code> / <code>scheduler-plugins/</code>），<strong>默认推荐 volcano/</strong>。详见各子目录 README。</p>
+<h2 id="配置说明">配置说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置说明">#</a></h2>
+<h3 id="valuesyaml-关键参数">values.yaml 关键参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#valuesyaml-关键参数">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">image</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  tag</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"sha-ec31ebe"</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">         # Trainer v2.2.0 镜像 SHA（对应 GitHub commit）</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">manager</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  replicas</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">2</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">                 # 控制器副本数（HA）</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">runtimes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  defaultEnabled</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">        # 部署所有内置 TrainingRuntime（torch / mpi / jax / paddle）</span></span></code></pre>
+<p>生产环境建议：</p>
+<ul>
+<li><code>manager.replicas: 2</code>（HA）</li>
+<li>固定 <code>image.tag</code>（避免 latest 标签不确定性）</li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 清理所有示例（可选）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainjobs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --all</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pods</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/trainjob-name</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载 Trainer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://github.com/kubeflow/trainer">Kubeflow Trainer 官方文档</a></li>
+<li><a href="https://github.com/kubeflow/trainer/blob/master/docs/api-reference/trainjob.md">TrainJob API Reference</a></li>
+<li><a href="https://github.com/kubeflow/trainer/tree/master/runtimes">TrainingRuntime 内置模板</a></li>
+</ul>

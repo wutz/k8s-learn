@@ -1,0 +1,436 @@
+<h1 id="部署-cephfs">部署 CephFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-cephfs">#</a></h1>
+<p>依赖 <a href="/lessons/storage/cephadm/1-deploy-ceph-cluster">部署 Ceph 集群</a></p>
+<h2 id="简介">简介<a class="heading-anchor" aria-hidden tabindex="-1" href="#简介">#</a></h2>
+<p>CephFS 是一个构建在 Ceph RADOS 之上并且兼容 POSIX 标准的文件系统.</p>
+<p>CephFS 提供一些功能:</p>
+<ul>
+<li>可扩展性</li>
+<li>共享文件系统</li>
+<li>多文件系统: 每个文件系统使用自己独立的 Pool 和 MDS</li>
+<li>高可用性</li>
+<li>可配置文件和目录的布局: 允许使用不同的 Pool 和文件条带模式</li>
+<li>POSIX ACL</li>
+<li>Quota: 支持到目录级别配额</li>
+</ul>
+<h2 id="组件">组件<a class="heading-anchor" aria-hidden tabindex="-1" href="#组件">#</a></h2>
+<ul>
+<li>Client: 用户空间的 <code>ceph-fuse</code> 或者内核空间的 <code>kcepfs</code></li>
+<li>MDS: 元数据服务</li>
+</ul>
+<h2 id="mds">MDS<a class="heading-anchor" aria-hidden tabindex="-1" href="#mds">#</a></h2>
+<ul>
+<li>Status: Active 或者 Standy (缺省只使用一个 Active MDS)</li>
+<li>Fail: 当 Active MDS 不响应时, Mon 会等待 <code>mds_beacon_grace</code> 时间后, 如果还不响应则标记 MDS 为 <code>laggy</code> . 然后 Standy MDS 变成 Active 状态</li>
+<li>Rank: 定义最大 Active MDS 数量用于分担元数据负载, <code>max_mds</code> 配置 rank 数量</li>
+<li>Cache:
+<ul>
+<li><code>mds_cache_memory_limit</code> 设置 MDS 使用内存大小 <code>ceph config set global mds_cache_memory_limit 34359738368</code></li>
+<li><code>mds_cache_size</code> 设置 MDS 使用 <code>inode</code> 数量</li>
+</ul>
+</li>
+<li>Affinity: 配置偏好使用的 MDS, 通过设置 <code>mds_join_fs</code> 在 Standby MDS 上</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ol>
+<li>调整 mds 缺省使用内存大小</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> global</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds_cache_memory_limit</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 34359738368</span></span></code></pre>
+<ol start="2">
+<li>创建 2 个副本 Pool 分别用于 metadata 和 data</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 metadata pool</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_metadata</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rep_ssd</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 pool 信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_metadata</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 data pool</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rep_ssd</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (可选) 设置此 pool 预计大小，有助于 PG 数量分配到合理值, 如果后续主要使用 EC POOL 则不需要设置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> target_size_bytes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 200T</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 pool 信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 PG 自动缩放状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> autoscale-status</span></span></code></pre>
+<ol start="3">
+<li>创建 CephFS</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 CephFS，名字为 cfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> new</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_metadata</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 CephFS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span></span></code></pre>
+<ol start="4">
+<li>部署 MDS 到节点上</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 MDS 到 2 个节点</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> orch</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --placement=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"2 label:mds"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 MDS 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> stat</span></span></code></pre>
+<ol start="5">
+<li>生成 Client 访问 Key</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#ceph fs authorize cfs01 client.cfs01 / rw |sudo tee /etc/ceph/ceph.client.cfs01.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 生成的 client key 同时允许 k8s ceph csi 使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get-or-create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client.cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow rw tag cephfs *=cfs01'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mon</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow r fsname=cfs01'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow rw fsname=cfs01'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mgr</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow rw'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sudo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.cfs01.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">chmod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 600</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.cfs01.keyring</span></span></code></pre>
+<ol start="6">
+<li>发送配置和 Key 到 Client</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ssh</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "mkdir /etc/ceph"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client:/etc/ceph</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.client.cfs01.keyring</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client:/etc/ceph</span></span></code></pre>
+<ol start="7">
+<li>挂载</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># Ubuntu 20.04 及以上</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">apt</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph-common</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/CentOS 7</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/yum.repos.d/ceph.repo</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[ceph]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">name=Ceph packages for $basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">baseurl=https://mirrors.tuna.tsinghua.edu.cn/ceph/rpm-15.2.17/el7/$basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">enabled=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">priority=2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgcheck=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgkey=https://mirrors.tuna.tsinghua.edu.cn/ceph/keys/release.asc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/RockyLinux 8</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/yum.repos.d/ceph.repo</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[ceph]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">name=Ceph packages for $basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">baseurl=https://mirrors.tuna.tsinghua.edu.cn/ceph/rpm-18.2.2/el8/$basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">enabled=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">priority=2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgcheck=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgkey=https://mirrors.tuna.tsinghua.edu.cn/ceph/keys/release.asc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># RHEL/RockyLinux 9</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/yum.repos.d/ceph.repo</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[ceph]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">name=Ceph packages for $basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">baseurl=https://mirrors.tuna.tsinghua.edu.cn/ceph/rpm-19.2.2/el9/$basearch</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">enabled=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">priority=2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgcheck=1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpgkey=https://mirrors.tuna.tsinghua.edu.cn/ceph/keys/release.asc</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 ceph-common</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph-common</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -t</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> :/</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name=cfs01,fs=cfs01</span></span></code></pre>
+<ol start="8">
+<li>设置开机挂载</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">vim</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># auto mount cephfs</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">:/</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name=cfs01,fs=cfs01</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span></span></code></pre>
+<h1 id="设置-quota">设置 quota<a class="heading-anchor" aria-hidden tabindex="-1" href="#设置-quota">#</a></h1>
+<blockquote>
+<p>参考：</p>
+<ul>
+<li><a href="https://docs.ceph.com/en/latest/cephfs/quota/">https://docs.ceph.com/en/latest/cephfs/quota/</a></li>
+<li><a href="https://docs.ceph.com/en/latest/cephfs/client-auth/">https://docs.ceph.com/en/latest/cephfs/client-auth/</a></li>
+</ul>
+</blockquote>
+<p>如果需要设置 quota 则需要额外 p 权限。设置 quota 还会改变 df 大小与 quota 一致。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> authorize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client.cfs01p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rwp</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.cfs01p.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">chmod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 600</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.cfs01p.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">scp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.client.cfs01p.keyring</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client:/etc/ceph</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -t</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> :/</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name=cfs01p,fs=cfs01</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 10TiB 配额</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">setfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.quota.max_bytes</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 10995116277760</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">getfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.quota.max_bytes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 使用量</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">getfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -m</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.dir.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 新 kernel 使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">getfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.dir.rbytes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span></code></pre>
+<h1 id="添加-ec-pool">添加 EC POOL<a class="heading-anchor" aria-hidden tabindex="-1" href="#添加-ec-pool">#</a></h1>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 ec pool</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (推荐) 设置 bulk 标记，以最大 PG 数量分配，有助于利用更多 OSD 提升性能</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> erasure</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ec42_ssd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bulk</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (可选) 设置此 pool 预计大小，有助于 PG 数量分配到合理值</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> target_size_bytes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 200T</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (必须) 设置此 pool 允许 EC 覆盖写</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow_ec_overwrites</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加 ec pool 到 cephfs 中</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add_data_pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 layout 需要 p 权限见 quota 配置 (任意挂载节点执行一次)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">setfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.dir.layout.pool</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span></code></pre>
+<h2 id="修改纠删码配置可选">修改纠删码配置（可选）<a class="heading-anchor" aria-hidden tabindex="-1" href="#修改纠删码配置可选">#</a></h2>
+<p><strong>注意： 本部分内容只是说明如何修改纠删码池的纠删码配置，默认不用执行</strong></p>
+<p>存储在创建初期可能由于节点个数的问题使用了纠删码配置ec22_ssd，后期随着节点的加入考虑到数据的安全性希望将纠删码配置修改为ec42_ssd。</p>
+<p>注意： Ceph不支持对已存在的存储池修改纠删码配置，需要新建ec42_ssd纠删码存储池并加入到当前文件系统中，然后设定为默认存储池。</p>
+<p>需要执行如下命令进行调整。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建一个使用ec42_ssd纠删码的存储池</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec42</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> erasure</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ec42_ssd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bulk</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (可选) 设置此 pool 预计大小，有助于 PG 数量分配到合理值</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec42</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> target_size_bytes</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 200T</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># (必须) 设置此 pool 允许 EC 覆盖写</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec42</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow_ec_overwrites</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 添加 ec pool 到 cephfs 中</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> add_data_pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec42</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 layout 需要 p 权限见 quota 配置 (任意挂载节点执行一次)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">setfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.dir.layout.pool</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01_data_ec42</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share</span></span></code></pre>
+<p><strong>注意：调整纠删码可能会导致该存储池进行数据的重新分配和平衡，执行期间可能会严重影响用户的使用体验。请谨慎执行该操作</strong></p>
+<h2 id="调整文件系统参数">调整文件系统参数<a class="heading-anchor" aria-hidden tabindex="-1" href="#调整文件系统参数">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 最大文件大小调整到32TB</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> max_file_size</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 35184372088832</span></span></code></pre>
+<h2 id="使用-k8s-pvc">使用 K8S PVC<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-k8s-pvc">#</a></h2>
+<p>创建 subvolumegroup</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> subvolumegroup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csi</span></span></code></pre>
+<p>然后在 k8s 集群中按照 <a href="https://github.com/wutz/k8s-in-action/blob/main/core/ceph-csi-cephfs/README.md">ceph-csi-cephfs</a> 部署 ceph-csi 即可</p>
+<h2 id="自定义-mds-缓存大小">自定义 MDS 缓存大小<a class="heading-anchor" aria-hidden tabindex="-1" href="#自定义-mds-缓存大小">#</a></h2>
+<p>每个热 inode 大约占 3500 字节，需要根据实际情况调大 mds 缓存大小，否则会造成频繁回收引起元数据响应延迟过大</p>
+<p>下面是设置指定文件系统 mds.cfs01 缓存大小为 64GiB</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds_cache_memory_limit</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 68719476736</span></span></code></pre>
+<h2 id="开启-mds-standby-replay-功能-可选">开启 MDS standby-replay 功能 （可选）<a class="heading-anchor" aria-hidden tabindex="-1" href="#开启-mds-standby-replay-功能-可选">#</a></h2>
+<p><strong>注意： 该部分内容需要根据实际需要进行开启。</strong></p>
+<p>standby-replay功能使 standby 实例内存一直维护主的缓存，用于主 mds 故障快速恢复。</p>
+<p>执行如下命令开启standby-replay功能</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">开启</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow_standby_replay</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">关闭</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> allow_standby_replay</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span></span></code></pre>
+<p>开启后如果使用ceph fs status命令，输出与不开启有些差别</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clients</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">========</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">RANK</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      STATE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                 MDS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                ACTIVITY</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     DNS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    INOS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   DIRS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   CAPS</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> 0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        active</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      cfs01.node01.bkyjmn</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Reqs:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  669</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  6554k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  5029k</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  3177</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    787k</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  </span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">0-s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   standby-replay</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  cfs01.node02.qwyzzn</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Evts:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1196</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  8113k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  5028k</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  3177</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">  </span></span></code></pre>
+<p>开启后会多出0-s一行，该行用于展示standby的信息。不开启的情况下没有这行内容。</p>
+<h2 id="多-mds-可选">多 MDS (可选)<a class="heading-anchor" aria-hidden tabindex="-1" href="#多-mds-可选">#</a></h2>
+<ul>
+<li>使用多个 mds 服务 一个 cephfs 可以分担请求压力，以及分散元数据缓存到不同的 mds 上</li>
+<li>为 HA，max_mds 数量必须小于 mds service 数量（即执行 <code>ceph orch apply mds cfs01 --placement=3</code>  数量）</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 关闭 mds balance （https://github.com/ceph/ceph/pull/52196/files）</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds_bal_interval</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 静态均衡 /share/home 的子目录</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">setfattr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph.dir.pin.distributed</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /share/home</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 增加 mds 数量到 2</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> max_mds</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 2</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 缩减 mds 数量到 1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> max_mds</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> stat</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span></span></code></pre>
+<h1 id="确认剩余空间">确认剩余空间<a class="heading-anchor" aria-hidden tabindex="-1" href="#确认剩余空间">#</a></h1>
+<p>有时需要确认文件系统可用空间好进行Ceph存储的下一步规划。</p>
+<p>文件系统的可用空间与文件系统使用存储池的类型得盘率有直接关系。</p>
+<table>
+<thead>
+<tr>
+<th align="center">存储池类型</th>
+<th>存储池设定</th>
+<th align="center">得盘率</th>
+<th align="center">计算方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="center">副本池</td>
+<td>2 副本</td>
+<td align="center">0.5</td>
+<td align="center">1/2</td>
+</tr>
+<tr>
+<td align="center">副本池</td>
+<td>3 副本</td>
+<td align="center">0.33</td>
+<td align="center">1/3</td>
+</tr>
+<tr>
+<td align="center">纠删码池</td>
+<td>2+2</td>
+<td align="center">0.5</td>
+<td align="center">2/4</td>
+</tr>
+<tr>
+<td align="center">纠删码池</td>
+<td>4+2</td>
+<td align="center">0.67</td>
+<td align="center">4/6</td>
+</tr>
+</tbody>
+</table>
+<p>假设cfs01文件系统默认使用2+2 纠删码池cfs01_data_ec，每个节点使用12块SSD磁盘，每块磁盘的大小为13.56TB，则cfs01文件系统可用空间计算方法为</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph df</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">---</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> POOLS</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> ---</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">POOL</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                ID</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  PGS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   STORED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  OBJECTS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     USED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  %USED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  MAX</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> AVAIL</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">.mgr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">                 1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">   73</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> MiB</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">       11</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  220</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> MiB</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    454</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> TiB</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01_data_ec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        4</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  256</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> B</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">        0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> B</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    682</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> TiB</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> </span></span></code></pre>
+<p>cfs01可用空间 =  682 TiB</p>
+<p>如果允许1节点离线，还需要减去  (12 * 14) * 0.5 = 84 TiB 最后剩余  682 - 84 = 598 TiB</p>
+<p>注意： 这里把13.56 向上进行了取整，也就是13.56 变成了 14 TiB</p>
+<h1 id="回收cephfs">回收CephFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#回收cephfs">#</a></h1>
+<p>当不再使用某文件系统时需要及时回收相关资源，防止出现资源浪费和信息泄露的情况。</p>
+<p>回收文件系统资源分为如下几个步骤</p>
+<p><strong>注意：本章节所描述内容全部需要在Ceph的服务端完成。</strong></p>
+<p>如果没有特殊说明，本章节所描述文件系统使用cfs01，挂载目录使用/share。</p>
+<h2 id="确认是否被客户端使用">确认是否被客户端使用<a class="heading-anchor" aria-hidden tabindex="-1" href="#确认是否被客户端使用">#</a></h2>
+<p>通过如下命令确认cfs01文件系统已经没有客户端在使用。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph fs status</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clients</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">========</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">RANK</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  STATE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             MDS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                ACTIVITY</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     DNS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    INOS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   DIRS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   CAPS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> 0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    active</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  cfs01.mds03.uhppzb</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Reqs:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  23.6k</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">    13</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">     12</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">      0</span></span></code></pre>
+<p>通过上面的ceph fs status命令可以得知该文件系统当前已经没有客户端在使用。该命令可能统计有些延时，也可以通过如下命令实时监控客户端使用情况。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.cfs01.mds03.uhppzb client ls</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[]</span></span></code></pre>
+<p>如果得到一个空的数组就表示该文件系统已经没有客户端在使用，可以继续回收操作。</p>
+<p>如果文件系统还有被客户端使用，通知管理员进行客户端的卸载。卸载完成后才能进行文件系统的回收工作。</p>
+<h2 id="清理文件系统上的文件">清理文件系统上的文件<a class="heading-anchor" aria-hidden tabindex="-1" href="#清理文件系统上的文件">#</a></h2>
+<p>在进行本章节操作之前请先将被操作的的文件系统挂载到当前服务器的某个目录下。比如将cfs01文件系统挂载到了/share目录下。</p>
+<p>本章节的所有操作全部在/share目录下进行。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># cd /share</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">进入到/share目录下</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># mkdir archive</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">创建一个archive目录，将用户文件全部移到该目录下。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># mkdir empty; rsync -avP --delete empty/ archive/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">一周后执行如下命令进行文件的清理。</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">如果rsync命令执行后无法清理文件，还可以尝试使用find+rm的组合命令去清理文件。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># find . -exec rm -fr {} \;</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">如果存在海量的文件和目录结构，建议先清理文件。然后再清理目录。</span></span></code></pre>
+<h2 id="清理客户端认证">清理客户端认证<a class="heading-anchor" aria-hidden tabindex="-1" href="#清理客户端认证">#</a></h2>
+<p>清理完文件以后需要更换文件系统客户端认证Key，按照如下步骤进行。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph auth ls</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">执行上面的命令找到cfs01的客户端认证名称。通常为client.cfs01</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph auth rm client.cfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">删除原来的认证</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 生成的 client key 同时允许 k8s ceph csi 使用</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph auth get-or-create client.cfs01 osd 'allow rw tag cephfs *=cfs01' mon 'allow r fsname=cfs01' mds 'allow rw fsname=cfs01' mgr 'allow rw' |sudo tee /etc/ceph/ceph.client.cfs01.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># chmod 600 /etc/ceph/ceph.client.cfs01.keyring</span></span></code></pre>
+<p>原则上MDS和存储池可以复用，为了防止误操作不建议执行删除操作。</p>
+<h1 id="故障排除">故障排除<a class="heading-anchor" aria-hidden tabindex="-1" href="#故障排除">#</a></h1>
+<p>本章节主要描述日常遇到的一些CephFS问题及问题解决方法。</p>
+<p>CephFS常见的问题包括响应缓慢、客户端操作卡主等。</p>
+<h2 id="cephfs响应缓慢">CephFS响应缓慢<a class="heading-anchor" aria-hidden tabindex="-1" href="#cephfs响应缓慢">#</a></h2>
+<p>本章节主要描述由于CephFS组件（MDS）造成的响应缓慢问题，请先确认你的单盘和OSD Pool性能没有问题。</p>
+<h3 id="获取cephfs-mds概要信息">获取CephFS MDS概要信息<a class="heading-anchor" aria-hidden tabindex="-1" href="#获取cephfs-mds概要信息">#</a></h3>
+<p>执行如下命令获取到指定CephFS的概要信息</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mn01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> fs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 96</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> clients</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">========</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">RANK</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  STATE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             MDS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                ACTIVITY</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     DNS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    INOS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   DIRS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   CAPS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> 0</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    active</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  cfs01.mn01.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  Reqs:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  2895</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /s</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      30.6M</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  30.5M</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  1997k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  21.5M</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">       POOL</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">          TYPE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">     USED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  AVAIL</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01_metadata</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  metadata</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   105G</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    114T</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cfs01_data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      data</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">       80.6T</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">   114T</span></span></code></pre>
+<p>96 clients表示已建立链接的客户端的数量。</p>
+<p>cfs01.mn01.zxhhrq 表示CephFS cfs01的主MDS运行在mn01节点上。</p>
+<p>DNS (Directory Number of Entries) 30.6M 表示文件系统中共计有 3050万个目录条目 (目录以及文件)，这个数字反映了 CephFS 中文件和目录的总数。</p>
+<p>INOS 30.5M 表示inode的总数。</p>
+<p>DIRS 1997k 表示文件系统中有 1997000 个目录。</p>
+<p><strong>CAPS</strong> 21.5M 表示已经授予给客户端的 capabilities 的数量。 高 CAPS 也意味着客户端对 CephFS 的活跃使用，<strong>如果CAPS的值大于等于 DNS的值可能存在MDS内存不够用的风险</strong>。</p>
+<h3 id="获取cephfs-mds的主从信息">获取CephFS MDS的主从信息<a class="heading-anchor" aria-hidden tabindex="-1" href="#获取cephfs-mds的主从信息">#</a></h3>
+<p>通过如下命令获取CephFS MDS主从服务的信息。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mn01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> orch</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ps</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --service_name</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                          HOST</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      PORTS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  STATUS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             REFRESHED</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  AGE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  MEM</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> USE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  MEM</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> LIM</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  VERSION</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  IMAGE</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ID</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      CONTAINER</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ID</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mds.cfs01.mn01.vogufr</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        mn01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             running</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> (4w)     5m ago     4w    23.8M        -  19.2.1   f2efb0401a30  265fe7d39a75</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mds.cfs01.mn02.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        mn02</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             running</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> (4w)     4m ago     4w     115G        -  19.2.1   f2efb0401a30  4f1b3a7617a6</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mds.cfs01.mn03.vgjudl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        mn03</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">             running</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> (4w)     4m ago     4w    25.6M        -  19.2.1   f2efb0401a30  462ac6e84fdf</span></span></code></pre>
+<p>通过如上信息大致的得到cfs01文件系统所有MDS服务的信息。重点关注 MEM USE 的大小，该值表示此MDS服务占用的内存大小。</p>
+<p>另外一个获取MDS服务的方法是直接登录到MDS服务对应的节点使用top观察其内存占用。</p>
+<h3 id="获取cephfs客户端访问请求事件">获取CephFS客户端访问请求事件<a class="heading-anchor" aria-hidden tabindex="-1" href="#获取cephfs客户端访问请求事件">#</a></h3>
+<p>通过如下命令可以获取CephFS客户端的请求事件。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mn01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tell</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01.mn01.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dump_ops_in_flight</span></span></code></pre>
+<p>默认该命令会输出所有客户端操作内容，通常需要过滤出需要用到的操作和客户端信息</p>
+<p>过滤出readdir操作</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mn01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tell</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01.mn01.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> dump_ops_in_flight</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> readdir</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">以下为部分输出信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">"description"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "client_request(client.165916:7196203 setfilelock rule 1, type 2, owner 16963308566499810484, pid 1461127, start 0, length 0, wait 1 #0x100120f7b34 2025-03-21T08:13:26.842573+0000 caller_uid=17448, caller_gid=17562{17562,})",</span></span></code></pre>
+<p>上面的输出信息中包含client.165916就是客户端的IP。</p>
+<p>排查客户端具体信息</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">root@mn01:~#</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tell</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01.mn01.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client.165916</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    {</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">        "id"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 205000,</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">        "entity"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> {</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">            "name"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> {</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">                "type"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "client",</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">                "num"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 205000</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">            },</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">            "addr"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> {</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">                "type"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "v1",</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">                "addr"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "10.251.10.17:0",</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">                "nonce"</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1156683885</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">            }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">        }</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">      ...</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    }</span></span></code></pre>
+<p>这里可以通过client.165916获取到客户端的id是205000，IP地址10.251.10.105。</p>
+<p>获取到客户端的IP地址后可以去对应节点观察客户端做了什么操作。</p>
+<p>除了以上的方法可以获取到客户端的基本信息以外，还可以通过观察mds的日志确认客户端慢请求操作。</p>
+<p>注意：以下操作涉及修改MDS服务的日志优先级，可能会影响MDS的响应速度，请谨慎操作。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph fs status</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">通过该命令找到指定文件系统mds的active服务所在服务器，比如mds.cfs01.mn01.zxhhrq所在服务器为mn01</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ssh mn01</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">登录到mn01服务器上</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># journalctl -e -u ceph-2623d358-ee87-11ef-a575-51ec07143d06@mds.cfs01.mn01.zxhhrq.service</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">默认情况下上述日志打印的级别比较低，需要调高日志级别观察到更多信息</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.zw3cfs02.zw3mds03.vgjudl config get debug_mds</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">获取当前配置值，后面需要恢复回该值，比如当前值为1/5</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.zw3cfs02.zw3mds03.vgjudl config set debug_mds 20</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">设定更高的优先级会导致mds压力增高，短暂开启后解决完问题需要立马关闭。</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.zw3cfs02.zw3mds03.vgjudl config set debug_mds "1/5"</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">恢复回原来的值</span></span></code></pre>
+<h3 id="响应慢处理方案">响应慢处理方案<a class="heading-anchor" aria-hidden tabindex="-1" href="#响应慢处理方案">#</a></h3>
+<h4 id="增加mds主服务内存容量">增加MDS主服务内存容量<a class="heading-anchor" aria-hidden tabindex="-1" href="#增加mds主服务内存容量">#</a></h4>
+<p>当发现MDS的CAPS值大于等于 DNS的值可能存在MDS内存不够用的风险后，可以尝试增加MDS服务的内存大小缓解当前遇到的问题。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph config set mds.cfs01 mds_cache_memory_limit 68719476736</span></span></code></pre>
+<p>修改后时刻观察MDS服务的内存占用情况和响应情况。</p>
+<h4 id="驱逐客户端">驱逐客户端<a class="heading-anchor" aria-hidden tabindex="-1" href="#驱逐客户端">#</a></h4>
+<p>当文件系统客户端无响应或出现其他异常行为时，可能需要强制终止其对文件系统的访问。这个过程称为驱逐。</p>
+<p>客户端可以自动驱逐（如果它们未能及时与 MDS 通信），或者手动驱逐（由系统管理员）。</p>
+<p>客户端驱逐过程适用于所有类型的客户端，包括 FUSE 挂载、内核挂载、nfs-ganesha 网关以及任何使用 libcephfs 的进程。</p>
+<p>在三种情况下，客户端可能会被自动驱逐:</p>
+<ol>
+<li>在一个活动的 MDS 守护进程上，如果一个客户端超过 session_autoclose 秒（一个文件系统变量，默认为 300 秒）没有与 MDS 通信，那么它将被自动驱逐。</li>
+<li>在一个活动的 MDS 守护进程上，如果一个客户端超过 mds_cap_revoke_eviction_timeout 秒（配置选项）没有响应 cap 撤销消息。 默认情况下，此功能处于禁用状态。</li>
+<li>在 MDS 启动期间（包括故障转移时），MDS 会经历一个名为 reconnect 的状态。在此状态下，它会等待所有客户端连接到新的 MDS 守护程序。如果任何客户端未能在时间窗口（ mds_reconnect_timeout ，默认为 45 秒）内执行此操作，则它们将被驱逐</li>
+</ol>
+<p>通过如下命令获取到客户端id</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tell</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mds.cfs01.mn01.zxhhrq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ls</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">[</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "id"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: 205000,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        "entity"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            "name"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                "type"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"client"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                "num"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">205000</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">            },</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">            "addr"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: {</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                "type"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"v1"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                "addr"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"10.251.10.17:0"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">                "nonce"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">1156683885</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">            }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">        }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">      ...</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    }</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">]</span></span></code></pre>
+<p>使用如下命令驱逐客户端</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.cfs01.mn01.zxhhrq client evict id=205000</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># ceph tell mds.cfs01.mn01.zxhhrq client evict client_metadata.=205000</span></span></code></pre>
+<p>参考文档:  <a href="https://docs.ceph.com/en/latest/cephfs/eviction/">https://docs.ceph.com/en/latest/cephfs/eviction/</a></p>
+<h2 id="性能测试">性能测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能测试">#</a></h2>
+<p>使用 <a href="https://github.com/wutz/k8s-in-action/blob/main/core/elbencho/">elbencho</a> 测试 CephFS 性能</p>
+<h2 id="监控">监控<a class="heading-anchor" aria-hidden tabindex="-1" href="#监控">#</a></h2>
+<p>如果没有 <code>ceph_mds_xxx</code> metrics 需要执行 <code>ceph config set mgr mgr/prometheus/exclude_perf_counters false</code> 切回从 mgr 获取 metrics</p>

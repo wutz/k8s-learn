@@ -1,0 +1,101 @@
+<h1 id="部署-juicefs"><a href="https://juicefs.com/docs/zh/community/introduction/">部署 JuiceFS</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-juicefs">#</a></h1>
+<p>JuiceFS 是一个开源的分布式文件系统，支持多种对象存储后端。</p>
+<p>使用 JuiceFS 的原因是可以在机械盘构建的对象存储上，再配合客户端缓存盘，实现高性能、低成本的存储解决方案。</p>
+<p>JuiceFS 主要包含 3 种版本，分别是：</p>
+<ul>
+<li>JuiceFS 社区版: 开源版本免费使用，支持客户端缓存盘, 需要自己分别提供元数据和对象存储</li>
+<li>JuiceFS 云版本: 相比开源版本，在各个云厂商上有部署好的元数据存储提供，需要自己提供对象存储, 相比社区版支持分布式缓存（用于解决单节点缓存空间有限，以及缓存在其它计算节点上问题）</li>
+<li>JuiceFS 企业版: 可以部署在私有集群上，元数据服务由原厂提供, 对象存储需要自己提供, 相比社区版本支持分布式缓存</li>
+</ul>
+<p>以下所有部署方式均是基于 JuiceFS 社区版本：</p>
+<ul>
+<li>云上：元数据可以选择云厂商提供的 RDS 版本的 Redis，对象存储直接使用云厂商提供的版本即可</li>
+<li>云下：
+<ul>
+<li>元数据
+<ul>
+<li>对于开发用途的使用<a href="https://github.com/wutz/k8s-in-action/blob/main/storage/redis/README.md">单机实例 Redis</a>，或者对数据一致性要求没有那么高使用 HA Redis</li>
+<li>对于数据一致性要求很高，元数据数量超过 2 亿以上使用 <a href="https://tikv.org/">TiKV</a></li>
+</ul>
+</li>
+<li>对象存储
+<ul>
+<li>社区上有小规模使用 MinIO, 规模稍大使用 SeaweedFS 案例</li>
+<li>在大规模成熟方案还有 Ceph, Ceph 提供 2 种方式
+<ul>
+<li>Ceph RGW 支持 S3 接口</li>
+<li>Ceph RADOS 提供原生 Ceph 接口，相比 Ceph RGW 减少中间协议转发层开销以及负载均衡开销</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>以下部署方式使用方案：</p>
+<ul>
+<li>元数据 (选择一个）：
+<ul>
+<li>Redis 适合文件数量在 1 亿以下，数据一致性要求不高场景
+<ul>
+<li><a href="/lessons/db/redis">单机版本 Redis</a> 适合开发测试</li>
+</ul>
+</li>
+<li>PostgreSQL 适合文件数量在 10 亿</li>
+<li>TiKV 适合文件数量在 100 亿，数据一致性要求高场景生产环境
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/storage/tikv/README.md">部署 TiKV 集群</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>对象存储
+<ul>
+<li><a href="/lessons/storage/cephadm/2-ceph-rados">Ceph RADOS</a></li>
+<li><a href="/lessons/storage/cephadm/5-deploy-rgw">Ceph RGW</a></li>
+<li><a href="/lessons/storage/rustfs">RustFS</a> 作为 minio 平替用于开发测试</li>
+</ul>
+</li>
+</ul>
+<h2 id="部署-juicefs-csi">部署 JuiceFS CSI<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-juicefs-csi">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="部署-juicefs-1">部署 JuiceFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-juicefs-1">#</a></h2>
+<p>可以在一个集群中部署多个 JuiceFS，下面分别演示元数据是 Redis 和 TiKV 的场景:</p>
+<ul>
+<li>JuiceFS 使用 PostgreSQL 作为元数据用于开发场景
+<ul>
+<li>复制示例 <code>cp -a examples/postgresql-s3/shared-juice .</code></li>
+<li>修改元数据连接信息: 修改文件 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/secret.yaml">shared-juice/secret.yaml</a> 中的 <code>metaurl</code> 为实际值</li>
+<li>修改对象存储连接信息</li>
+</ul>
+</li>
+<li>JuiceFS 使用 Redis 作为元数据用于开发场景
+<ul>
+<li>复制示例 <code>cp -a examples/redis-minio/shared-juice .</code></li>
+<li>修改元数据连接信息: 修改文件 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/secret.yaml">shared-juice/secret.yaml</a> 中的 <code>metaurl</code> 为实际值</li>
+<li>修改对象存储连接信息</li>
+</ul>
+</li>
+<li>JuiceFS 使用 TiKV 作为元数据用于生产场景
+<ul>
+<li>复制示例 <code>cp -a examples/tikv-ceph/shared-juice .</code></li>
+<li>修改元数据连接信息: 修改文件 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/secret.yaml">shared-juice/secret.yaml</a> 中的 <code>metaurl</code> 为实际值</li>
+<li>修改对象存储连接信息</li>
+<li>放置 ceph 配置文件到 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/ceph">shared-juice/ceph</a> 中</li>
+<li>如果提供的 ceph 配置不是 <code>ceph.client.jfs02.keyring</code> 则需要修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/kustomization.yaml">kustomization.yaml</a> 中的实际文件名称，以及 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/secret.yaml">shared-juice/secret.yaml</a> 中的 <code>secret-key</code> 为实际值</li>
+<li>最后修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/juicefs-csi/shared-juice/secret.yaml">shared-juice/secret.yaml</a> 中的 <code>bucket</code> 值，其值为 ceph pool 名称</li>
+<li>使用 TiKV 场景 JuiceFS CSI 存在<a href="https://github.com/juicedata/juicefs-csi-driver/issues/443#issuecomment-2323272940">问题</a>, 请按照问题 workaround 进行操作</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署执行</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> shared-juice/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 验证</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载 JuiceFS</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> shared-juice/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 卸载 JuiceFS CSI</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>

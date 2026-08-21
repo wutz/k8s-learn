@@ -1,0 +1,74 @@
+<h1 id="kubespray-自动部署-k8s-集群">Kubespray 自动部署 K8S 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubespray-自动部署-k8s-集群">#</a></h1>
+<h2 id="注意">注意<a class="heading-anchor" aria-hidden tabindex="-1" href="#注意">#</a></h2>
+<ul>
+<li>cilium 会占用 route table <a href="https://github.com/cilium/cilium/pull/40248/files">200/202/2004/2005</a>, 如果宿主机有网络也使用这些路由表, 则需要修改宿主机网络配置, 否则会导致网络异常</li>
+</ul>
+<h2 id="部署集群">部署集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署集群">#</a></h2>
+<p>以下均在安装节点 (能 ssh <strong>免密</strong>访问到所有待部署的节点) 执行:</p>
+<ul>
+<li>设置环境变量</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> KUBESPRAY_VERSION</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"2.31.0"</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> UV_VERSION</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"0.11.7"</span></span></code></pre>
+<ul>
+<li>安装依赖</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 下载并安装 uv 和 uvx</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">wget</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://file.mir.blsc.cn/uv/releases/</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">UV_VERSION</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/uv-x86_64-unknown-linux-musl.tar.gz</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tar</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zxvf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> uv-x86_64-unknown-linux-musl.tar.gz</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> uv-x86_64-unknown-linux-musl/</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /usr/local/bin/</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 uv 镜像</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.config/uv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.config/uv/config.toml</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">[[index]]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">url = "https://mirrors.ustc.edu.cn/pypi/simple"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default = true</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span></code></pre>
+<ul>
+<li>下载 kubespray 和安装依赖</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 下载 kubespray</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">wget</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://file.mir.blsc.cn/kubespray/releases/kubespray-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBESPRAY_VERSION</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.tar.gz</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tar</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zxvf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubespray-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBESPRAY_VERSION</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.tar.gz</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kubespray-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBESPRAY_VERSION</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 venv 并安装依赖</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> UV_PYTHON_INSTALL_MIRROR</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">https</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">://</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">file</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">mir</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">blsc</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">cn</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">/</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">uv</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">/</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">py</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">uv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> venv</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --python</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 3.12.12</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .venv/bin/activate</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">uv</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pip</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> requirements.txt</span></span></code></pre>
+<ul>
+<li>配置 inventory 文件</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 拷贝已验证配置文件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/k8s-in-action/k8s/kubespray/kubespray-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">KUBESPRAY_VERSION</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/inventory/mycluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/</span></span></code></pre>
+<ul>
+<li>执行部署</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .venv/bin/activate</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster.yml</span></span></code></pre>
+<p>从第一个控制平面节点获取 <code>/root/.kube/config</code> 文件, 并修改 <code>server</code> 地址为 <code>https://&#x3C;kube_vip_address>:6443</code></p>
+<h2 id="更新指定组件部署">更新指定组件部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#更新指定组件部署">#</a></h2>
+<p>用于加速更新部署，如果全量更新则需要很长时间执行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .venv/bin/activate</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看所有组件可用的 tag</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster.yml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --list-tags</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 更新指定 tags, 例如 coredns</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster.yml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tags=coredns</span></span></code></pre>
+<h2 id="扩容节点">扩容节点<a class="heading-anchor" aria-hidden tabindex="-1" href="#扩容节点">#</a></h2>
+<ul>
+<li>添加节点到 <code>inventory/mycluster/inventory.ini</code></li>
+<li>执行</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .venv/bin/activate</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> playbooks/facts.yml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale.yml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --limit=newnode1,newnode2</span></span></code></pre>
+<h2 id="卸载集群">卸载集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载集群">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> .venv/bin/activate</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ansible-playbook</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/inventory.ini</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -b</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u=root</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> reset.yml</span></span></code></pre>

@@ -1,0 +1,36 @@
+<h1 id="vllm-sts">vllm-sts<a class="heading-anchor" aria-hidden tabindex="-1" href="#vllm-sts">#</a></h1>
+<p>演示使用 vllm 部署推理服务，使用 StatefulSet 部署，适用于多个单节点推理</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<p>根据环境需要修改：</p>
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm/sglang-sts/rbg.yaml">rbg.yaml</a> 部署 sglang 负载服务
+<ul>
+<li><code>--model-path</code> 和 <code>--served-model-name</code> 设置模型路径和名称</li>
+<li><code>--hicache-size 200</code> 设置 KV Cache 卸载到 Host Memory 200 GB, 其值应小于 <code>resources.limits.memory</code></li>
+<li><code>resources.limits</code> 设置 CPU、内存、GPU</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<p>查看日志：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">stern</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sts-sglang</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> metrics</span></span></code></pre>
+<ul>
+<li>HiCache 相关记录
+<ul>
+<li><code>Allocating 199.98 GB host memory for hierarchical KV cache</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="访问">访问<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">IP</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gateway/inference-gateway</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.status.addresses[0].value}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">PORT</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">80</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -i</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> ${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">IP</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">:</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">${</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">PORT</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">}</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/v1/completions</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -H</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Content-Type: application/json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '{</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"model": "sglang/Qwen/Qwen3-32B",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"prompt": "Write as if you were a critic: San Francisco",</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"max_tokens": 100,</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"temperature": 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">}'</span></span></code></pre>
+<blockquote>
+<p>第一次访问模型较慢</p>
+</blockquote>

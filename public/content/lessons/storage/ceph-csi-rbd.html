@@ -1,0 +1,31 @@
+<h1 id="ceph-csi-rbd">ceph-csi-rbd<a class="heading-anchor" aria-hidden tabindex="-1" href="#ceph-csi-rbd">#</a></h1>
+<blockquote>
+<p>GA</p>
+</blockquote>
+<p>用于添加 rbd csi 进入集群</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<ol>
+<li>
+<p>部署 csi</p>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/ceph-csi-rbd/values.yml">values.yml</a> 中的 Ceph 集群连接信息，信息来自 <code>ceph.conf</code> 文件</p>
+<p>如果添加多个 Ceph 集群，在 <code>values.yml</code> 中继续添加连接信息即可</p>
+</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<ol start="2">
+<li>
+<p>部署 storageclass</p>
+<p>假如命名 storageclass 为 <code>block-nvme</code>，则需要创建 <code>block-nvme</code> 目录，并创建 <code>secret.yaml</code> 和 <code>storageclass.yaml</code> 文件</p>
+<p>其中 <code>secret.yaml</code> 文件中的 <code>userID</code> 来自 <code>ceph.client.bj1rbd01.keyring</code> 名称 <code>bj1rbd01</code>, <code>userKey</code> 来自 <code>ceph.client.bj1rbd01.keyring</code> 文件内容
+其中 <code>storageclass.yaml</code> 文件中的 <code>pool</code> 来自 <code>ceph.client.bj1rbd01.keyring</code> 名中的 <code>bj1rbd01</code></p>
+</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> block-nvme/</span></span></code></pre>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<p>修改 <a href="https://github.com/wutz/k8s-in-action/blob/main/storage/ceph-csi-rbd/tests.yaml">tests.yaml</a> 中的 <code>storageClassName</code> 为 <code>block-nvme</code>，然后运行</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>
+<p>进来 pod 中观测挂载的目录</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -it</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csi-rbd-demo-pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /bin/bash</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">df</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -h</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /var/lib/www</span></span></code></pre>
+<p>测试完毕后，删除 pod 和 pvc</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tests.yaml</span></span></code></pre>

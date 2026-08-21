@@ -1,0 +1,26 @@
+<h1 id="weka-分层存储">Weka 分层存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#weka-分层存储">#</a></h1>
+<h2 id="概念">概念<a class="heading-anchor" aria-hidden tabindex="-1" href="#概念">#</a></h2>
+<ul>
+<li>小于 1M 文件会被合并为大对象(大约 1M)上传对象存储</li>
+<li>大文件会被拆分为 8/16/32/64M 对象上传对象存储</li>
+<li>文件组主要设置分层策略
+<ul>
+<li>保留策略 (Drive Retention Period): 文件最后变更或者访问后在 SSD 保留时间，缺省时间 1 天</li>
+<li>分层提示策略 (Tiering cue policy): 文件最后变更后等 “分层提示策略时间” 后会上传到对象存储，缺省时间 15 分钟</li>
+<li>保留策略至少是分层提示策略时间 3 倍大小</li>
+</ul>
+</li>
+<li>如果读取数据不在 SSD 上，则需要从对象存储上读取, 并重新执行上面分层策略</li>
+<li>如果 SSD 已满，但是数据还未卸载到对象存储，则会背压到对象存储上性能下降</li>
+<li>每个元数据占用 4k 并总是存放在 SSD 上, 并且统计在 <code>df -h</code> 中(即占用文件系统总空间)，但 <code>du -sh</code> 不统计元数据大小</li>
+</ul>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<ul>
+<li>添加对象存储：Manage -> Object Stores -> Create，推荐每个文件系统对应一个 Bucket</li>
+<li>附加对象存储到文件系统上：Mange -> Filesystems -> Attach Object Store Bucket, 选择对应对象存储然后保存</li>
+<li>修改文件系统大小：Manage -> Filesystems -> Edit -> Tiering -> Total Capacity</li>
+</ul>
+<h2 id="移除">移除<a class="heading-anchor" aria-hidden tabindex="-1" href="#移除">#</a></h2>
+<ul>
+<li>Manage -> Filesystems -> Deattach, 选择文件系统大小变为 SSD 大小</li>
+</ul>

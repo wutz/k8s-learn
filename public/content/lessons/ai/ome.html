@@ -1,0 +1,10 @@
+<h1 id="ome"><a href="https://docs.sglang.ai/ome/docs/installation/">OME</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#ome">#</a></h1>
+<p>一个 Kubernetes 原生的，高性能的分布式 LLM 推理框架，类似于 Dynamo, llm-d 等</p>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<p>首先部署依赖：</p>
+<ul>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/core/cert-manager/README.md">cert-manager</a> 用于签发证书</li>
+<li>部署 <a href="/lessons/ai/lws">lws</a> 用于支持多节点和 PD 分离推理部署</li>
+</ul>
+<p>然后部署 OME：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>

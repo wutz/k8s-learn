@@ -1,0 +1,60 @@
+<h1 id="serviceaccount--rbac">ServiceAccount + RBAC<a class="heading-anchor" aria-hidden tabindex="-1" href="#serviceaccount--rbac">#</a></h1>
+<p>以人员的角度，赋予人员集群的权限</p>
+<h2 id="serviceaccount">ServiceAccount<a class="heading-anchor" aria-hidden tabindex="-1" href="#serviceaccount">#</a></h2>
+<ul>
+<li>使用 <code>ServiceAccount</code> 和 <code>Secret</code> 认证</li>
+<li>建议将控制人员权限相关的 <code>ServiceAccount</code> 和 <code>Secret</code> 统一放在一个 <code>namespace</code> 里管理，例如 <code>sa-management</code></li>
+</ul>
+<h2 id="rbac">RBAC<a class="heading-anchor" aria-hidden tabindex="-1" href="#rbac">#</a></h2>
+<ul>
+<li>分为集群 RBAC 和命名空间 RBAC</li>
+<li>通常建议赋予 <code>namespace</code> 的查看权限，便于使用插件 <code>kubectx</code></li>
+<li><code>Role</code> + <code>RoleBinding</code> 被创建在哪个 <code>namespace</code> ，则代表赋予在该 <code>namespace</code> 相关权限</li>
+</ul>
+<h2 id="role-和-clusterrole-的使用">Role 和 ClusterRole 的使用<a class="heading-anchor" aria-hidden tabindex="-1" href="#role-和-clusterrole-的使用">#</a></h2>
+<ul>
+<li>执行 <code>kubectl api-resources</code></li>
+</ul>
+<pre><code>NAME                               SHORTNAMES                          APIVERSION                                  NAMESPACED   KIND
+bindings                                                               v1                                          true         Binding
+configmaps                         cm                                  v1                                          true         ConfigMap
+events                             ev                                  v1                                          true         Event
+namespaces                         ns                                  v1                                          false        Namespace
+storageclasses                     sc                                  storage.k8s.io/v1                           false        StorageClass
+</code></pre>
+<ul>
+<li><code>namespaced</code> 资源通过 <code>Role</code> 控制权限，非 <code>namespaced</code> 资源使用 <code>ClusterRole</code> 控制权限</li>
+<li><code>APIVERSION</code> 是 <code>v1</code> 时，代表apiGroups为<code>core</code>，配置 <code>Role</code> 和 <code>ClusterRole</code> 时 <code>apiGroups</code> 以 <code>""</code> 表示</li>
+<li><code>APIVERSION</code> 是 <code>storage.k8s.io/v1</code> 时，代表apiGroups为<code>storage.k8s.io</code>，配置 <code>Role</code> 和 <code>ClusterRole</code> 时 <code>apiGroups</code> 以 <code>storage.k8s.io</code> 表示</li>
+</ul>
+<h2 id="示例">示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#示例">#</a></h2>
+<ol>
+<li>准备配置文件 <code>harbor-developer</code></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> harbor-developer</span></span></code></pre>
+<ol>
+<li>获取认证 <code>Token</code></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sa-management</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> harbor-developer</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath="{.data.token}"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> base64</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span></span></code></pre>
+<ol>
+<li>创建 <code>kubeconfig</code>，并替换模板中的 <code>token</code> 为真实值</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> apiVersion:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> clusters:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">   cluster:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     insecure-skip-tls-verify:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> true</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     server:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://10.128.0.10:7443</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> contexts:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">   context:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     cluster:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     namespace:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> harbor</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     user:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a-harbor-developer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> current-context:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> kind:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Config</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> preferences:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> {}</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> users:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> -</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> name:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> bj1a-harbor-developer</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">   user:</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">     token:</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">toke</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">n</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span></span></code></pre>

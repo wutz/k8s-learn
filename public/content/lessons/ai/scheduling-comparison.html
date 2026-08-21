@@ -1,0 +1,229 @@
+<h1 id="kubernetes-批处理调度指南与选型决策">Kubernetes 批处理调度指南与选型决策<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubernetes-批处理调度指南与选型决策">#</a></h1>
+<blockquote>
+<p>适用环境：Kubernetes v1.32+，Kubeflow Trainer 场景
+核心目标：解决分布式训练的 Gang Scheduling（全组 Pod 必须同时启动）与资源配额管理问题。</p>
+</blockquote>
+<hr>
+<h2 id="1-结论与架构推荐tldr">1. 结论与架构推荐（TL;DR）<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-结论与架构推荐tldr">#</a></h2>
+<p>针对当前生产环境和一线实操需求，经过对多个调度方案的深度对比与实测，给出以下明确的选型结论：</p>
+<ul>
+<li><strong>🏆 首选方案：Kueue</strong>
+<ul>
+<li><strong>核心优势</strong>：在<strong>准入层</strong>进行管控，资源不够时完全不创建 Pod，<strong>零额外调度开销</strong>。对 Kubeflow Trainer 具备完美的<strong>原生支持</strong>（仅需增加 3 个字段，全程自动化）。</li>
+<li><strong>适用场景</strong>：绝大多数 AI 训练场景、需要精准配额控制、追求系统轻量稳定的集群。</li>
+</ul>
+</li>
+<li><strong>🥈 备选方案：Volcano</strong>
+<ul>
+<li><strong>核心优势</strong>：老牌批处理调度器，在<strong>调度层</strong>工作。插件生态丰富。</li>
+<li><strong>适用场景</strong>：极大规模纯 GPU 集群、重度多租户、需要复杂的调度策略（如 DRF、Binpack、比例分配）。</li>
+</ul>
+</li>
+<li><strong>🚫 明确弃用：Coscheduling (scheduler-plugins)</strong>
+<ul>
+<li><strong>原因</strong>：设计缺陷导致在资源不足时会引发<strong>爆发式的 FailedScheduling 事件</strong>（实测产生 40 万+ 事件），极度消耗 apiserver 和调度器性能。社区重心已转移，长期维护存疑。</li>
+</ul>
+</li>
+<li><strong>🚫 当前不可用：kube-scheduler 原生 Gang Scheduling</strong>
+<ul>
+<li><strong>原因</strong>：原生支持（v1.35+）目前仍处于 Alpha 阶段，默认禁用，<strong>禁止用于生产环境</strong>。待未来稳定后可作为演进方向。</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p><strong>🔥 致命冲突警告：Kueue 与 Volcano 共存的 Webhook 陷阱</strong>
+如果集群中<strong>同时安装</strong>了 Kueue 和 Volcano，Kueue 的 Pod mutating webhook 会拦截 Volcano 的 Pod，强行覆盖 <code>schedulerName</code> 并注入 <code>suspended=true</code>，导致 Volcano 调度<strong>彻底瘫痪</strong>。
+<strong>规避方案</strong>：确保 Kueue 的 <code>values.yaml</code> 中 <code>integrations.frameworks</code> 列表<strong>绝对不要包含 <code>pod</code> 和 <code>deployment</code></strong>，只保留 <code>batch/job</code>, <code>trainer.kubeflow.org/trainjob</code> 等明确的 Job 资源。</p>
+</blockquote>
+<hr>
+<h2 id="2-核心场景实战操作">2. 核心场景实战操作<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-核心场景实战操作">#</a></h2>
+<p>在确定选型后，以下是一线工程师最常用的 TrainJob 提交流程和配置模板。</p>
+<h3 id="场景-a使用-kueue-提交-trainjob推荐极简">场景 A：使用 Kueue 提交 TrainJob（推荐，极简）<a class="heading-anchor" aria-hidden tabindex="-1" href="#场景-a使用-kueue-提交-trainjob推荐极简">#</a></h3>
+<p>Kueue 的接入体验最好，无需手动创建任何额外的 PodGroup 资源，依靠 webhook 自动接管。</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">trainer.kubeflow.org/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">TrainJob</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-job</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  labels</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    kueue.x-k8s.io/queue-name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">gpu-local-queue</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">       # 必填：指向对应的 LocalQueue</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">    # kueue.x-k8s.io/priority-class: high-priority   # 可选：指定 Workload 优先级</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  suspend</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">true</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">                                      # 必填：设为 true，交由 Kueue 决定何时 unsuspend</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  runtimeRef</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">torch-distributed</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  trainer</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    numNodes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">2</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    resourcesPerNode</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      requests</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        nvidia.com/gpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"1"</span></span></code></pre>
+<p><strong>避坑</strong>：不要配置 <code>spec.managedBy</code>，该字段仅在 MultiKueue 跨集群场景使用。</p>
+<h3 id="场景-b使用-volcano-提交-trainjob繁琐易错">场景 B：使用 Volcano 提交 TrainJob（繁琐，易错）<a class="heading-anchor" aria-hidden tabindex="-1" href="#场景-b使用-volcano-提交-trainjob繁琐易错">#</a></h3>
+<p>Volcano 需要依赖 <code>PodGroup</code> 对象，但 TrainJob 的 webhook 不会自动创建 Volcano 版本的 PodGroup。</p>
+<blockquote>
+<p>⚠️ <strong>时序陷阱</strong>：<strong>必须先手动创建 PodGroup，再提交 TrainJob</strong>，否则任务永远无法被调度。</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 必须先创建 PodGroup</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">scheduling.volcano.sh/v1beta1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">PodGroup</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-training</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  minMember</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">2</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">          # 必须等于 TrainJob.trainer.numNodes</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  queue</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">default</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#ABB2BF">---</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 再提交 TrainJob</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">apiVersion</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">trainer.kubeflow.org/v1alpha1</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">kind</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">TrainJob</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-training</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  suspend</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">false</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  runtimeRef</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">torch-distributed-volcano</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"> # 此 runtime 需配置 schedulerName: volcano</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  trainer</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    numNodes</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">2</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">    resourcesPerNode</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      requests</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: { </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">nvidia.com/gpu</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"1"</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> }</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">  runtimePatches</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">    - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">manager</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">scheduling.volcano.sh/volcano</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">      trainingRuntimeSpec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">        template</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">          spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">            replicatedJobs</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">              - </span><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">node</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                template</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                  spec</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                    template</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                      metadata</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                        annotations</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">:</span></span>
+<span class="line"><span style="--shiki-light:#22863A;--shiki-dark:#E06C75">                          scheduling.k8s.io/group-name</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">: </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">my-training</span><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"> # 必须与上方 PodGroup 名字一致</span></span></code></pre>
+<hr>
+<h2 id="3-核心差异对比kueue-vs-volcano">3. 核心差异对比：Kueue vs Volcano<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-核心差异对比kueue-vs-volcano">#</a></h2>
+<p>我们剔除不再推荐的方案，仅对比生产可用的两套系统，帮助您理解它们的行为差异。</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>🥇 Kueue</th>
+<th>🥈 Volcano</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>切入层面</strong></td>
+<td><strong>准入层</strong>（Admission Webhook）</td>
+<td><strong>调度层</strong>（独立 scheduler）</td>
+</tr>
+<tr>
+<td><strong>工作原理</strong></td>
+<td>资源够 → 放行 (unsuspend) 创建 Pod。<br>资源不够 → <strong>拦截，保持 Job suspend，0 个 Pod 被创建</strong>。</td>
+<td>Pod 直接创建 → 绕过原生调度器交由 Volcano 评估。<br>资源不够 → <strong>全组 Pod 处于 Pending 状态</strong>，等待凑齐。</td>
+</tr>
+<tr>
+<td><strong>队列/配额发现</strong></td>
+<td>需手工填写 <code>nominalQuota</code>，不自动发现集群资源（运维需手动对齐容量）。</td>
+<td>默认 <code>root</code> Queue 自动继承集群总资源。</td>
+</tr>
+<tr>
+<td><strong>CRD 冲突注意</strong></td>
+<td>LocalQueue 的 short name 是 <code>queue</code> ⚠️</td>
+<td>Queue 的 short name 是 <code>q</code> ⚠️</td>
+</tr>
+<tr>
+<td><strong>抢占粒度</strong></td>
+<td>跨同 Cohort 的 Workload 级抢占（all-or-nothing）。</td>
+<td>跨 Queue / 同 Queue 的 PodGroup 级抢占。</td>
+</tr>
+<tr>
+<td><strong>额外组件数</strong></td>
+<td>1 个：<code>kueue-controller-manager</code></td>
+<td>3 个：<code>scheduler</code> + <code>controller</code> + <code>admission</code></td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4-生产环境避坑与排障指南">4. 生产环境避坑与排障指南<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-生产环境避坑与排障指南">#</a></h2>
+<p>结合一线实测，遇到任务无法运行时的快速自检表。</p>
+<h3 id="41-kueue-常见问题">4.1 Kueue 常见问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#41-kueue-常见问题">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>诊断动作</th>
+<th>常见原因与解决办法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TrainJob 一直 <code>Suspended</code></td>
+<td><code>kubectl get workload</code> 查状态<br><code>kubectl describe workload &#x3C;name></code></td>
+<td>1. 忘记打 <code>kueue.x-k8s.io/queue-name</code> label。<br>2. LocalQueue 名字写错或不在当前 namespace。<br>3. <code>nominalQuota</code> 不足，正常排队中。</td>
+</tr>
+<tr>
+<td>Workload 处于 <code>Admitted=False</code></td>
+<td>查看 Workload YAML 中的 <code>status.conditions[].message</code></td>
+<td>1. TAS (拓扑感知调度) 找不到足够符合拓扑的节点（message 会打印 excluded nodes 原因）。<br>2. 配置的 <code>nominalQuota</code> 小于实际请求。</td>
+</tr>
+<tr>
+<td>TAS 莫名拦截任务</td>
+<td><code>kubectl get nodes -L kubernetes.io/hostname,scclabs.dev/gpu</code></td>
+<td>节点缺少 Topology 层级要求的标签，或者 GPU 节点的 Tolerations 没有在 Kueue 的 <code>ResourceFlavor</code> 中显式声明（TAS 不认自动注入）。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-volcano-常见问题">4.2 Volcano 常见问题<a class="heading-anchor" aria-hidden tabindex="-1" href="#42-volcano-常见问题">#</a></h3>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>诊断动作</th>
+<th>常见原因与解决办法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TrainJob 卡住，PodGroup 压根没创建</td>
+<td><code>kubectl get podgroups.scheduling.volcano.sh</code></td>
+<td>忘记提前应用 PodGroup YAML，导致 TrainJob 无法匹配到 Gang。</td>
+</tr>
+<tr>
+<td>Pod 起来了但 <code>schedulerName</code> 不是 volcano</td>
+<td><code>kubectl get pod &#x3C;name> -o yaml | grep schedulerName</code></td>
+<td>被 Kueue 的 webhook 拦截并覆盖了。参考第 1 节“致命冲突警告”修改 Kueue 配置。</td>
+</tr>
+<tr>
+<td>Pod 没关联到 PodGroup</td>
+<td><code>kubectl get pod &#x3C;name> -o yaml | grep group-name</code></td>
+<td><code>runtimePatches</code> 写错了，没有成功注入 <code>scheduling.k8s.io/group-name</code> annotation。</td>
+</tr>
+<tr>
+<td>PodGroup 一直 Pending</td>
+<td><code>kubectl describe podgroup &#x3C;name></code></td>
+<td>1. 集群剩余 GPU 真不够了。<br>2. YAML 里的 <code>minMember</code> 和 TrainJob 的 <code>numNodes</code> 数值写得不一致。</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="5-附录与技术前瞻">5. 附录与技术前瞻<a class="heading-anchor" aria-hidden tabindex="-1" href="#5-附录与技术前瞻">#</a></h2>
+<blockquote>
+<p>本节内容供架构师或资深工程师参考，解答“为什么不用 XXX”以及“Kubernetes 原生未来怎么做”。</p>
+</blockquote>
+<h3 id="51-为什么坚决淘汰-coscheduling">5.1 为什么坚决淘汰 Coscheduling？<a class="heading-anchor" aria-hidden tabindex="-1" href="#51-为什么坚决淘汰-coscheduling">#</a></h3>
+<p>Coscheduling 作为 scheduler-plugins 的一部分，最大的硬伤在于<strong>资源不足时的调度风暴</strong>。
+它作为一个“插件”，底层仍然依赖 kube-scheduler 逐个 Pod 进行处理。当提交一个需要 48 GPU 的任务，但集群只有 24 GPU 时：
+所有 48 个 Pod 都会被创建并处于 Pending -> 调度器在每一个调度周期 (Scheduling Cycle) 都会傻乎乎地去尝试绑定这 48 个 Pod -> 到了 Permit 阶段发现凑不齐，全部打回 -> 下个周期继续尝试。
+<strong>实测结果</strong>：在很短的时间内就会产生超过 <strong>40万次</strong> 的 <code>FailedScheduling</code> 事件，极大地消耗控制面资源。</p>
+<h3 id="52-kubernetes-原生-gang-scheduling-演进-v135--v136">5.2 Kubernetes 原生 Gang Scheduling 演进 (v1.35 / v1.36)<a class="heading-anchor" aria-hidden tabindex="-1" href="#52-kubernetes-原生-gang-scheduling-演进-v135--v136">#</a></h3>
+<p>SIG-scheduling 的最终形态其实是 <strong>Kueue 负责配额管理 + Kube-Scheduler 原生负责 Gang 调度</strong>。
+目前原生支持在 v1.35 Alpha 引入，它的核心架构设计如下：</p>
+<ol>
+<li><strong>API 解耦 (v1.36 v1alpha2)</strong>：将策略模板 <code>Workload</code> 与运行时实例 <code>PodGroup</code> 完全解耦，解决了单个对象过大带来的 etcd 压力。</li>
+<li><strong>PreEnqueue 阻塞</strong>：引入新的扩展点。Pod 在进入调度队列前，必须确认关联的 PodGroup 已存在，且已创建的 Pod 数量 ≥ <code>minCount</code>，否则直接拦截在队外，避免 Coscheduling 那种盲目重试。</li>
+<li><strong>Workload Scheduling Cycle (v1.36)</strong>：这是最大的架构改变。以前是逐个 Pod 调度，现在是将整个 PodGroup 作为一个调度单元，在单次周期内完成全组评估，彻底解决死锁和活锁问题。</li>
+<li><strong>Delayed Preemption (延迟抢占)</strong>：在寻找受害者 (victims) 时只计算不执行。只有当确认抢占后能满足整个 PodGroup 的 <code>minCount</code> 时，才会真正执行驱逐。实现了<strong>零无效干扰</strong>。</li>
+</ol>
+<p><strong>演进路线图</strong>：</p>
+<ul>
+<li><strong>当前</strong>：Kueue 为主。</li>
+<li><strong>未来 (待原生稳定)</strong>：Kueue + 原生 PodGroup。Kueue 释放 Pod 后，交由原生内置机制保证 All-or-nothing。彻底告别第三方调度器组件。</li>
+</ul>

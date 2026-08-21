@@ -1,0 +1,187 @@
+<h1 id="nccl-tests-快速指南">NCCL Tests 快速指南<a class="heading-anchor" aria-hidden tabindex="-1" href="#nccl-tests-快速指南">#</a></h1>
+<p>测试分布式 GPU 集群的 NCCL 通信带宽。两件必做事：</p>
+<table>
+<thead>
+<tr>
+<th align="right">#</th>
+<th>任务</th>
+<th>目标</th>
+<th>all_reduce_perf 参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="right">1</td>
+<td>单次测试</td>
+<td>正确性验证 + 性能曲线</td>
+<td><code>-b 8 -e 8G -f 2 -g 1</code></td>
+</tr>
+<tr>
+<td align="right">2</td>
+<td>压力测试</td>
+<td>持续满载打带宽，验证长稳</td>
+<td><code>-b 8G -e 8G -i 0 -g 1</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>先做任务一，通过后再做任务二。</strong></p>
+<h2 id="配置选择">配置选择<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置选择">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>GPU</th>
+<th>网络</th>
+<th>NCCL_IB_HCA</th>
+<th>NCCL_SOCKET_IFNAME</th>
+<th align="right"><code>-e</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nccl-tests-5090.yaml</code></td>
+<td>RTX 5090</td>
+<td>hostnet</td>
+<td><code>mlx5</code></td>
+<td><code>bond0</code></td>
+<td align="right">8G</td>
+</tr>
+<tr>
+<td><code>nccl-tests-5090-macvlan.yaml</code></td>
+<td>RTX 5090</td>
+<td>macvlan</td>
+<td><code>mlx5</code></td>
+<td><code>eth0</code></td>
+<td align="right">8G</td>
+</tr>
+<tr>
+<td><code>nccl-tests-b200.yaml</code></td>
+<td>B200</td>
+<td>hostnet</td>
+<td><code>mlx5</code></td>
+<td><code>bond1</code></td>
+<td align="right">16G</td>
+</tr>
+<tr>
+<td><code>nccl-tests-b300.yaml</code></td>
+<td>B300</td>
+<td>hostnet</td>
+<td><code>roce_vf_rail</code></td>
+<td><code>bond1</code></td>
+<td align="right">64G</td>
+</tr>
+<tr>
+<td><code>nccl-tests-a100-ib.yaml</code></td>
+<td>A100</td>
+<td>macvlan</td>
+<td><code>^=mlx5_4</code></td>
+<td><code>eth0</code></td>
+<td align="right">8G</td>
+</tr>
+</tbody>
+</table>
+<p>网络模式说明：</p>
+<ul>
+<li><strong>hostnet</strong>：无需额外组件，单节点不可并行多任务（端口冲突）</li>
+<li><strong>macvlan</strong>：需 Spiderpool + IPPool，Pod 独立 IP，可并行多任务</li>
+<li><strong>RoCE 网络用 hostnet 时必须设 <code>hostNetwork: true</code></strong></li>
+</ul>
+<hr>
+<h2 id="任务一单次测试">任务一：单次测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#任务一单次测试">#</a></h2>
+<h3 id="完成标准">完成标准<a class="heading-anchor" aria-hidden tabindex="-1" href="#完成标准">#</a></h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" disabled> 日志输出 <code># Out of bounds values : 0 OK</code></li>
+<li class="task-list-item"><input type="checkbox" disabled> 日志输出 <code># Wrong values : 0 OK</code></li>
+<li class="task-list-item"><input type="checkbox" disabled> 峰值 busbw（最大 size 对应行）≥ 理论峰值 90%</li>
+</ul>
+<h3 id="步骤">步骤<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤">#</a></h3>
+<ol>
+<li><strong>提交测试</strong>（以 5090 为例）</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090.yaml</span></span></code></pre>
+<ol start="2">
+<li><strong>查看日志</strong>（完整日志含 NCCL 初始化）</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/replicated-job-name=launcher</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tail=-1</span></span></code></pre>
+<ol start="3">
+<li><strong>判定</strong>：对照完成标准检查日志末尾。</li>
+</ol>
+<hr>
+<h2 id="任务二压力测试">任务二：压力测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#任务二压力测试">#</a></h2>
+<h3 id="完成标准-1">完成标准<a class="heading-anchor" aria-hidden tabindex="-1" href="#完成标准-1">#</a></h3>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" disabled> 日志持续输出 8G 数据行的 busbw，无 NCCL error</li>
+<li class="task-list-item"><input type="checkbox" disabled> busbw ≥ 理论峰值 90%</li>
+<li class="task-list-item"><input type="checkbox" disabled> 持续运行达到预期时长后手动停止</li>
+</ul>
+<h3 id="步骤-1">步骤<a class="heading-anchor" aria-hidden tabindex="-1" href="#步骤-1">#</a></h3>
+<ol>
+<li><strong>修改 YAML 中的 all_reduce_perf 参数</strong></li>
+</ol>
+<p>将 all_reduce_perf 命令行改为压测参数（以 5090 为例）：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 's|all_reduce_perf -b 8 -e 8G -f 2 -g 1|all_reduce_perf -b 8G -e 8G -i 0 -g 1|'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    nccl-tests-5090.yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-stress.yaml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 预览确认</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">diff</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090.yaml</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-stress.yaml</span></span></code></pre>
+<blockquote>
+<p>不同机型原始 <code>-e</code> 值不同（8G/16G/64G），替换时匹配 YAML 中的实际命令行。以下提供通用替换：</p>
+</blockquote>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 通用：匹配含 all_reduce_perf 的整行替换</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">sed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '/all_reduce_perf/s|-b 8 -e .*-f 2 -g 1|-b 8G -e 8G -i 0 -g 1|'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    nccl-tests-5090.yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-stress.yaml</span></span></code></pre>
+<ol start="2">
+<li><strong>提交并查看日志</strong></li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-stress.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> logs</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> trainer.kubeflow.org/replicated-job-name=launcher</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tail=-1</span></span></code></pre>
+<ol start="3">
+<li><strong>停止压测</strong>（达到预期时长后）</li>
+</ol>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> nccl-tests-5090-stress.yaml</span></span></code></pre>
+<hr>
+<h2 id="日志解读">日志解读<a class="heading-anchor" aria-hidden tabindex="-1" href="#日志解读">#</a></h2>
+<p>all_reduce_perf 输出关键字段：</p>
+<pre><code>#       size       time   algbw   error  busbw
+#        (B)      (us)  (GB/s)     (%)  (GB/s)
+            8     xx.xx     xx.x       0     xx       ← 最小 size，测延迟
+           16
+           32
+           ...
+   8589934592     xx.xx     xx.x       0   100.5      ← 最大 size，看这一行 busbw
+
+# Out of bounds values : 0 OK                    ← 必须为 0 OK
+# Avg bus bandwidth    : xx.xx
+# Wrong values : 0 OK                            ← 必须为 0 OK
+</code></pre>
+<ul>
+<li><strong>busbw（最后列 GB/s）</strong>：校正后总线带宽，直接对比硬件峰值</li>
+<li>理论峰值因机型而异，见 <a href="/lessons/ai/nccl-tests/config-reference">config-reference.md</a></li>
+</ul>
+<h3 id="压测日志">压测日志<a class="heading-anchor" aria-hidden tabindex="-1" href="#压测日志">#</a></h3>
+<p>压测命令 <code>-b 8G -e 8G -i 0</code> 固定 8G 持续运行，日志会<strong>重复输出 8G 数据行</strong>，每行含 20 次迭代均值。持续观察 busbw 是否稳定，关注是否有突降或 NCCL error。</p>
+<hr>
+<h2 id="性能基准">性能基准<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能基准">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>评级</th>
+<th align="right">busbw / 理论峰值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>优秀</td>
+<td align="right">≥ 90%</td>
+</tr>
+<tr>
+<td>可接受</td>
+<td align="right">80–90%</td>
+</tr>
+<tr>
+<td>异常</td>
+<td align="right">&#x3C; 80%</td>
+</tr>
+</tbody>
+</table>
+<p>busbw 校正因子（all_reduce）：<code>2(n-1)/n</code>，n 为 GPU 总数。</p>

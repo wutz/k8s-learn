@@ -1,0 +1,42 @@
+<h1 id="提供-ceph-rados-原生服务">提供 Ceph RADOS 原生服务<a class="heading-anchor" aria-hidden tabindex="-1" href="#提供-ceph-rados-原生服务">#</a></h1>
+<p>依赖 <a href="/lessons/storage/cephadm/1-deploy-ceph-cluster">部署 Ceph 集群</a></p>
+<p>一般用于访问 Ceph RADOS 原生服务的客户端程序，下面以为 JuiceFS 提供 Ceph RADOS Pool 为例.</p>
+<p>相比于 Ceph RGW (s3) 接口，Ceph RADOS 减少额外开销服务(RGW 实例)以及流量负载均衡问题。</p>
+<ul>
+<li>
+<p>创建 Pool <code>mypool</code></p>
+<p>根据性能需求选择副本池或者纠删码池</p>
+<ul>
+<li>
+<p>创建副本 Pool</p>
+<p>副本池适合高 IOPS 场景</p>
+</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建 pool</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rep_ssd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bulk</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置 pool 用途</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> application</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> myapp</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询 pool 信息</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 设置此 pool 预估占用空间比例, 这将自带调整 PG 数量（上面初始值为 32), 更大 PG 有助于提高吞吐量</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> target_size_ratio</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0.3</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查询各个 pool 实际分配 PG 数量</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> autoscale-status</span></span></code></pre>
+<pre><code>* 创建纠删码 Pool
+
+    纠删码池适合吞吐型及高得盘率场景
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 32</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> erasure</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ec42_ssd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --bulk</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> application</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> myapp</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> target_size_ratio</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0.3</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> autoscale-status</span></span></code></pre>
+<ul>
+<li>创建 key 用于客户端访问此 pool</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">ceph</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> auth</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get-or-create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client.mypool</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mon</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow r'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> osd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'allow rw pool=mypool'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tee</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.mypool.keyring</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">chmod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 0600</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ceph/ceph.client.mypool.keyring</span></span></code></pre>
+<pre><code>最后提供 `/etc/ceph/ceph.conf` 和 `/etc/ceph/ceph.client.mypool.keyring` 给客户端使用
+</code></pre>

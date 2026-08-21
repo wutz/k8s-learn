@@ -1,0 +1,31 @@
+<h1 id="kubevirt">KubeVirt<a class="heading-anchor" aria-hidden tabindex="-1" href="#kubevirt">#</a></h1>
+<blockquote>
+<p>施工中，不要用于生产环境</p>
+</blockquote>
+<p><a href="https://github.com/kubevirt/kubevirt">KubeVirt</a> 是 Kubernetes 的虚拟机管理插件。其目标是在 Kubernetes 之上为虚拟化解决方案提供一个共同的基础。</p>
+<h2 id="准备">准备<a class="heading-anchor" aria-hidden tabindex="-1" href="#准备">#</a></h2>
+<ul>
+<li>关闭 AppArmor/SELinux, 参见 <a href="/lessons/os/os#%E5%85%B3%E9%97%AD-selinux-%E6%88%96-apparmor">os/os.md</a></li>
+<li>检查硬件虚拟机是否支持 <code>virt-host-validate qemu</code>
+<ul>
+<li>如果命令不存在执行 <code>apt install libvirt-clients -y</code></li>
+<li>如果输出为 <code>QEMU: Checking for hardware virtualization: PASS</code> 则表示硬件虚拟化支持</li>
+</ul>
+</li>
+<li>containerd 开启 <a href="https://github.com/kubevirt/containerized-data-importer/blob/main/doc/block_cri_ownership_config.md">device_ownership_from_security_context</a>
+<ul>
+<li>使用 kubespray 部署参见 containerd <code>containerd_extra_runtime_args</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 operator</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> operator</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 kubevirt</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 cdi, 使用 PVC 作为 KubeVirt 磁盘</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cdi</span></span></code></pre>
+<h2 id="使用">使用<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用">#</a></h2>
+<p>访问 <a href="/lessons/compute/kubevirt/workload">workload</a></p>

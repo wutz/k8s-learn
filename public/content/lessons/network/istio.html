@@ -1,0 +1,27 @@
+<h1 id="istio">Istio<a class="heading-anchor" aria-hidden tabindex="-1" href="#istio">#</a></h1>
+<p><a href="https://github.com/istio/istio">Istio</a> 扩展了 Kubernetes，以建立可编程、应用程序感知的网络。Istio 可与 Kubernetes 和传统工作负载配合使用，为复杂的部署带来标准、通用的流量管理、可观测和安全性。</p>
+<p>Istio 同时实现 Ingress, Gateway API 和 Gateway API Inference Extension (GIE)。</p>
+<p>在生产实践中可以按需选择使用, 例如在推理场景中只使用 Gateway API 和 GIE 即可。</p>
+<p>Istio 对于 ServiceMesh 支持 2 种部署模式:</p>
+<ul>
+<li>Sidecar：最早支持模式，在每个 Pod 中注入 Sidecar，优点支持 Istio 全部功能，缺点是消耗资源高以及延迟开销较大</li>
+<li>Ambient: 1.22 开始生产可用，在每个节点启动支持 L4 实例 Ztunnel，使用 L7 增强功能按需启用，优点资源消耗小和延迟低</li>
+</ul>
+<p>采用的 Ambient 模式, 为命名空间添加标签才会开启 L4 支持，L7 需要配置才会启用。</p>
+<h2 id="依赖">依赖<a class="heading-anchor" aria-hidden tabindex="-1" href="#依赖">#</a></h2>
+<ul>
+<li><a href="https://github.com/spidernet-io/spiderpool/issues/5109">spiderpool</a> 与 Istio 的 Ambient 模式有兼容问题，所以采用 Sidecar 模式。</li>
+<li><a href="/lessons/network/metallb">metallb</a></li>
+</ul>
+<h2 id="部署">部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<p>(可选) 配置 Istio 作为 <a href="/lessons/network/istio/ingress">Ingress Controller</a></p>
+<p>(推荐) 配置 <a href="/lessons/network/istio/gateway-api">Gateway API</a> 用于新服务</p>
+<h2 id="测试">测试<a class="heading-anchor" aria-hidden tabindex="-1" href="#测试">#</a></h2>
+<p>访问 <a href="/lessons/network/istio/tests">tests</a></p>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> down</span></span></code></pre>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://gateway-api-inference-extension.sigs.k8s.io/guides/">Gateway API Inference Extension 部署</a></li>
+</ul>

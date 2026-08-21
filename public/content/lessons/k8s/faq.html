@@ -1,0 +1,147 @@
+<h1 id="k8s-faq">K8S FAQ<a class="heading-anchor" aria-hidden tabindex="-1" href="#k8s-faq">#</a></h1>
+<h2 id="etcd">ETCD<a class="heading-anchor" aria-hidden tabindex="-1" href="#etcd">#</a></h2>
+<ul>
+<li>问题</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdserver:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mvcc:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> database</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> space</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exceeded</span></span></code></pre>
+<ul>
+<li>
+<p>原因</p>
+<ul>
+<li>etcd 使用 MVCC（Multi-Version Concurrency Control）机制，每当 Kubernetes 对象（如 Pod、Secret、ConfigMap、Deployment 等）被创建、更新或删除时，都会产生一个新的 revision（版本历史）</li>
+<li>这些历史版本会积累，导致 etcd 的数据库文件（db 文件）不断增长</li>
+<li>etcd 默认设置了一个后端配额 --quota-backend-bytes，默认值为 2GB（部分 Kubernetes 发行版如某些 RKE/Kublr 为 4GB），官方推荐最大不超过 8GB</li>
+<li>当数据库大小接近或超过这个配额时，etcd 会触发 NOSPACE alarm，进入维护模式，只允许读和删除操作，拒绝新写入。这会导致 Kubernetes API Server 无法正常工作，集群出现各种问题（如 Pod 无法调度、kubectl 命令失败等）</li>
+</ul>
+</li>
+<li>
+<p>短期解决方法, 压缩释放空间</p>
+<p>所有 etcd 节点都需要执行如下命令：</p>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 加载 etcd 环境变量</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/etcd.env</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> +a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 etcd 状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> endpoint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --write-out=table</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cluster</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> alarm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 etcd 版本    </span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">revision</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> endpoint</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --write-out=json</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> jq</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '.[0].Status.header.revision'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 压缩 etcd 数据</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> compact</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $revision</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 碎片整理</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> defrag</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 解除 alarm</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcdctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> alarm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> disarm</span></span></code></pre>
+<ul>
+<li>
+<p>长期解决方法，增加 etcd 存储空间</p>
+<ul>
+<li>直接修改<strong>所有控制节点</strong> etcd 配置并滚动重启 etcd 服务</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">vim</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/etcd.env</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">ETCD_QUOTA_BACKEND_BYTES</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">8589934592</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> restart</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> etcd</span></span></code></pre>
+<pre><code>* 或者在部署 kubespray 时设置 etcd 存储空间
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">vim</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> inventory/mycluster/group_vars/all/etcd.yml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">etcd_quota_backend_bytes:</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 8589934592</span></span></code></pre>
+<ul>
+<li>检查 quota 设置</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/etcd.env</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">set</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> +a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cert</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $ETCDCTL_CERT</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --key</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $ETCDCTL_KEY</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --cacert</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $ETCDCTL_CACERT</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> $ETCDCTL_ENDPOINTS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/metrics</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">grep</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> quota</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> etcd_server_quota_backend_bytes 8.589934592e+09</span></span></code></pre>
+<h2 id="systemd-cgroup">Systemd Cgroup<a class="heading-anchor" aria-hidden tabindex="-1" href="#systemd-cgroup">#</a></h2>
+<ul>
+<li>
+<p>问题：</p>
+<ul>
+<li>提交 GPU Pod 不设置 <code>resources</code> 申请 GPU 资源，并设置环境变量 <code>NVIDIA_VISIBLE_DEVICES=all</code></li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">apiVersion: v1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kind: Pod</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">metadata:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    name: gpu-test</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">spec:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    restartPolicy: Never</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    containers:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    - name: cuda</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      image: nvidia/cuda:12.0.0-base-ubuntu22.04</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      command: ["tail", "-f", "/dev/null"]</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      env:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      - name: NVIDIA_VISIBLE_DEVICES</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">        value: "all"</span></span></code></pre>
+<pre><code>* 在 host 上执行 `systemctl daemon-reload` 后，GPU Pod 内执行 `nvidia-smi` 报错如下：
+</code></pre>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">nvidia-smi</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">Failed</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> to</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> initialize</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> NVML:</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Unknown</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Error</span></span></code></pre>
+<ul>
+<li>
+<p>原因</p>
+<ul>
+<li>当容器运行时缺省使用 systemd cgroup 驱动时，执行 <code>systemctl daemon-reload</code> 会更新容器相关 cgroup</li>
+<li>这会导致容器 Pod 丢失 NVIDIA GPU 设备访问权限，使用 <code>resources.limits.nvidia.com/gpu</code> 已在 gpu-operator 22.9.2 通过注入设备软链接解决</li>
+<li>但是不设置 <code>resources.limits.nvidia.com/gpu</code> 时跳过对应逻辑处理</li>
+</ul>
+</li>
+<li>
+<p>方案</p>
+<ul>
+<li>
+<p>短期解决方案，使用 cgroupfs 驱动</p>
+<ul>
+<li>
+<p>修改容器运行时配置</p>
+<ul>
+<li>修改 containerd 配置文件 <code>/etc/containerd/config.toml</code> 设置 <code>SystemdCgroup = false</code> (共计 4 个)</li>
+<li>重启 containerd 服务 <code>systemctl restart containerd</code></li>
+</ul>
+</li>
+<li>
+<p>如何使用 kubespray 部署或者扩容，则在 <code>inventory/mycluster/group_vars/all/containerd.yml</code> 中设置 <code>containerd_use_systemd_cgroup: false</code></p>
+<ul>
+<li>这设置 <code>runc.options</code> 中的 <code>SystemdCgroup: false</code></li>
+<li>GPU Operator 提供的 <code>nvidia-container-toolkit-daemonset</code> 会从 <code>runc.options</code> 中读取 <code>SystemdCgroup</code> 设置来配置 <code>nvidia runtime</code> 使用 <code>cgroupfs</code> 驱动</li>
+</ul>
+</li>
+<li>
+<p>其它：从 k8s 1.31 开始 <a href="https://kubernetes.io/blog/2024/08/21/cri-cgroup-driver-lookup-now-beta/">kubelet 开启自动探测 cgroup driver</a> 后续版本废弃 kubelet 配置 <code>cgroupDriver</code> 参数, 即从 k8s 1.31 开始无需在 kubelet 配置 cgroupDriver 参数</p>
+</li>
+</ul>
+</li>
+<li>
+<p>长期解决方案，使用 K8S DRA 实现跨 Pod 的 GPU 共享</p>
+</li>
+</ul>
+</li>
+<li>
+<p>参考: <a href="https://github.com/NVIDIA/gpu-operator/issues/503">Kubernetes containers using NVIDIA_VISIBLE_DEVICES lose device access after systemctl daemon-reload </a></p>
+</li>
+</ul>
+<h2 id="nginx-proxy-fatal">nginx-proxy fatal<a class="heading-anchor" aria-hidden tabindex="-1" href="#nginx-proxy-fatal">#</a></h2>
+<ul>
+<li>错误</li>
+</ul>
+<pre><code>TASK [kubernetes/node : Nginx-proxy | Write nginx-proxy configuration] *********************************************************************************************************
+task path: /root/deploy/kubespray-2.29.0/roles/kubernetes/node/tasks/loadbalancer/nginx-proxy.yml:14
+An exception occurred during task execution. To see the full traceback, use -vvv. The error was: ansible.errors.AnsibleFilterError: Unrecognized type &#x3C;&#x3C;class 'ansible.template.native_helpers.AnsibleUndefined'>> for ipwrap filter &#x3C;value>
+fatal: [gn-10-0-1-98]: FAILED! => {"changed": false, "msg": "AnsibleFilterError: Unrecognized type &#x3C;&#x3C;class 'ansible.template.native_helpers.AnsibleUndefined'>> for ipwrap filter &#x3C;value>"}
+</code></pre>
+<ul>
+<li>
+<p>方案</p>
+<p>添加 <code>main_access_ip</code>，值跟 <code>ansible_host</code> 一致，示例：</p>
+</li>
+</ul>
+<pre><code>[kube_control_plane]
+mn-10-0-3-158 ansible_host=10.0.3.158 main_access_ip=10.0.3.158 ip=10.0.3.158 etcd_member_name=etcd1
+</code></pre>

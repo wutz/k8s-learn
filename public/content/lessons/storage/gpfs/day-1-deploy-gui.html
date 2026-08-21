@@ -1,0 +1,61 @@
+<h2 id="部署-gui">部署 GUI<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-gui">#</a></h2>
+<p>GUI服务节点只配置管理网，不用配置数据网。</p>
+<p>GUI服务节点需要和集群内所有节点免密。</p>
+<p>GUI服务节点需要部署在服务端集群和客户端集群。</p>
+<h3 id="部署-gpfs">部署 GPFS<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-gpfs">#</a></h3>
+<p>把GUI服务节点的IP和主机名关系加入到指定集群节点的/etc/hosts文件中。</p>
+<p>做好GUI服务节点到集群内其他节点的免密。</p>
+<p>去掉如下提示，防止GUI脚本执行失败
+The authenticity of host ... can't be established. Are you sure you want to continue connecting (yes/no/[fingerprint])?</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> 'EOF'</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/ssh/ssh_config.d/99-gpfs.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">Host *</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    StrictHostKeyChecking no</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    UserKnownHostsFile /dev/null</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span></code></pre>
+<h3 id="部署-gui-1">部署 GUI<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-gui-1">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装依赖</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">dnf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> kernel-devel-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">uname</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">) </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">kernel-headers-</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">uname</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -r</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">) </span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">make</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gcc</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> elfutils-libelf-devel</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装全部软件包</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs_rpms</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B"> *</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmbuildgpl</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 初始化postgresql数据库</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/bin/postgresql-setup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --initdb</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装pmcollector和pmsensors</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> zimon_rpms</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">yum</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfs.gss.</span><span style="--shiki-light:#005CC5;--shiki-dark:#E5C07B">*</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">.rpm</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 在集群仲裁节点上把GUI节点加入到集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmaddnode</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gui-10-1-120-222</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchlicense</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> client</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --accept</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gui-10-1-120-222</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动gui服务</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> start</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gpfsgui.service</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 初始化GUI节点服务</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/initgui</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建GUI管理员</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=administering-managing-gui-users</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/mkuser</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -g</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> SecurityAdmin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Admin@123'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 管理员密码不过期</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/chuser</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> admin</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -e</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 初始化pmcollector</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/bin/mmperfmon</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> config</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generate</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --collectors</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> gui-10-1-120-222</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动pmcollector</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">systemctl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> enable</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pmcollector</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --now</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动pmsensors</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动前需要确认所有节点都已经安装好pmsensor包。</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> /usr/lpp/mmfs/bin/mmchnode</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --perfmon</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -N</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> all</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 创建csi专用用户</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/mkuser</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csiuser1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> xxxxxx</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -g</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> CsiAdmin</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">/usr/lpp/mmfs/gui/cli/chuser</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> csiuser1</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -e</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> 1</span></span></code></pre>

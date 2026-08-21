@@ -1,0 +1,169 @@
+<h1 id="gpfs-网络">GPFS 网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#gpfs-网络">#</a></h1>
+<h2 id="介绍">介绍<a class="heading-anchor" aria-hidden tabindex="-1" href="#介绍">#</a></h2>
+<ul>
+<li>为什么使用 RDMA
+<ul>
+<li>直接移动数据，避免数据复制和上下文切换</li>
+<li>节省CPU周期，让DMA引擎完成工作，绕过内核</li>
+<li>收敛：单一网络支持存储和计算, 主要在 HPC 场景</li>
+<li>RDMA: Remote Direct Memory Access</li>
+<li>目标：高性能网络
+<ul>
+<li>Low latency</li>
+<li>High throughput</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>传统TCP/IP与RDMA协议栈对比
+<img src="/content/images/63df187d-tcpip-vs-rdma.png" alt="tcpip-vs-rdma"></li>
+<li>GPFS 支持 RDMA 网络
+<ul>
+<li>支持 IB 和 RoCE</li>
+<li>引入以支持批量数据（verbsRdma）</li>
+<li>也可以通过RDMA（verbsRdmaSend）将守护进程发送到守护进程的RPCs</li>
+<li>RDMA 是 GPFS 集群节点之间页面池（pagepool）进出的传输方式。</li>
+<li>守护进程网络始终需要 TCP/IP（可能是 IPoIB）</li>
+<li>稳健性
+<ul>
+<li>支持从 RDMA 回退到 TCP/IP</li>
+<li>RDMA 超时请求检测</li>
+</ul>
+</li>
+<li>健康监测</li>
+</ul>
+</li>
+</ul>
+<h2 id="配置">配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置">#</a></h2>
+<ul>
+<li>控制面网络
+<ul>
+<li><code>daemon-interface</code> 使用创建节点时 hostname 或者 ip
+<ul>
+<li>初始连接建立和 fallback</li>
+<li>心跳，lease，token 和 RPC 通信</li>
+<li>TCP 通信配置 subnets 则初始连接建立后使用 subnets 的 IP 地址</li>
+<li>RDMA 配置 <code>verbsRdmaSend=yes</code> 则使用 RDMA</li>
+</ul>
+</li>
+<li><code>admin-interface</code> 缺省继承 <code>daemon-interface</code>
+<ul>
+<li>用于集群管理命令执行, 通常走 ssh 协议</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>RDMA 配置
+<ul>
+<li><code>verbsRdma = [yes|no]</code>
+<ul>
+<li>是否启用 RDMA (IO 通信走 RDMA)</li>
+<li>缺省为关闭 (支持 RDMA 必须开启)
+<img src="/content/images/d62da748-verbsrdma-no.png" alt="verbsrdma-no">
+<img src="/content/images/bb9f7640-verbsrdma-yes.png" alt="verbsrdma-yes"></li>
+</ul>
+</li>
+<li><code>verbsPorts = &#x3C;device>/&#x3C;port>/&#x3C;fabric>/&#x3C;service level></code>
+<ul>
+<li>要使用的 RDMA 端口列表</li>
+<li>可以指定多个设备，使用空格分隔，例如 <code>verbsPorts = "mlx5_2/1 mlx5_3/1 mlx5_4/1 mlx5_5/1"</code></li>
+</ul>
+</li>
+<li><code>verbsRdmaSend = [yes|no]</code>
+<ul>
+<li>启用 RDMA Send 以用于发送和接收 RPC (控制走 RDMA)</li>
+<li>缺省为关闭
+<ul>
+<li>yes: 守护进程也走 RDMA，性能更好</li>
+<li>no: 守护进程走 TCP/IP，超大规模集群稳定性更好
+<ul>
+<li>在 500 节点以上不要启用
+<img src="/content/images/64691a4a-verbsrdmasend-yes.png" alt="verbsrdmasend-yes"></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>verbsRdmaCm = [yes|no]</code>
+<ul>
+<li>是否启用 RDMA Connection Manager (RDMA_CM) API 来建立和管理 RDMA 连接</li>
+<li>缺省为关闭 (支持 RoCE <strong>必须</strong>开启)</li>
+</ul>
+</li>
+<li>配置示例</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 修改配置</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> verbsRdma=enable,verbsRdmaSend=yes,verbsPorts="mlx5_2/1 mlx5_3/1 mlx5_4/1 mlx5_5/1",verbsRdmaCm=enable</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重启集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmshutdown</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmstartup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待所有节点状态为 active</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmgetstate</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看 RDMA 是否开启</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmfsadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> verbs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 测试 RDMA 连接状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmfsadm</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> test</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> verbs</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> conn</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看网络状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmdiag</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --network</span></span></code></pre>
+<ul>
+<li>TCP 配置
+<ul>
+<li>GPFS 5.1.5 支持 TCP 多轨通信 (MROT), 可以并发使用多个子网和多个物理接口</li>
+<li><code>subnets = "&#x3C;subnet1> &#x3C;subnet2> ..."</code>
+<ul>
+<li>支持多个 subnet 之间负载均衡和故障转移</li>
+<li>如何未设置 subnet 则使用 daemon IP</li>
+<li>2 节点间 TCP 通信必须属于 subnets 配置内的, 否则回退 daemon interface 通信</li>
+</ul>
+</li>
+<li><code>maxTcpConnsPerNodeConn = &#x3C;number></code>
+<ul>
+<li>缺省值为 2</li>
+<li>多 interface 时，必须大于或等于 interface 数量</li>
+<li>对于 Bonding 设备，增大此值以提高性能</li>
+<li><a href="https://www.spectrumscaleug.org/wp-content/uploads/2022/07/episode-17-spectrum-scale-mcot.pdf">Episode 17: Spectrum Scale MCOT</a></li>
+<li><a href="https://www.ibm.com/support/pages/ibm-spectrum-scale-multi-connection-over-tcp-mcot-tuning-may-be-required">multi-connection over TCP (MCOT): tuning may be required</a></li>
+</ul>
+</li>
+<li>配置示例</li>
+</ul>
+</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 网络配置：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 每个 interface 分配 4 个 conns</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 使用 remotecluster 时</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   * 在每个集群上均需要配置互相连接的集群网段</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic">#   * 每个网络后需要添加后缀描述集群名称</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 不同网段集群配置示例：</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 一个集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> subnets="10.24.1.0 10.24.2.0 10.24.3.0 10.24.4.0",maxTcpConnsPerNodeConn=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">16</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 客户端和存储集群不在相同段，每个段后缀描述集群名称</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> subnets="10.24.1.0/gpfs1.example.com 10.24.2.0/gpfs1.example.com 10.24.3.0/gpfs1.example.com 10.24.4.0/gpfs1.example.com 10.24.5.0/client1.example.com 10.24.6.0/client1.example.com",maxTcpConnsPerNodeConn=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">16</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># * 客户端和存储集群在相同段, 集群名称不相似</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> subnets="10.24.1.0/gpfs1.example.com;client1.example.com 10.24.2.0/gpfs1.example.com;client1.example.com 10.24.3.0/gpfs1.example.com;client1.example.com 10.24.4.0/gpfs1.example.com;client1.example.com",maxTcpConnsPerNodeConn=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">16</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 客户端和存储集群在相同段，集群名称相似性</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmchconfig</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> subnets="10.24.1.0/gpfs[12].example.com 10.24.2.0/gpfs[12].example.com 10.24.3.0/gpfs[12].example.com 10.24.4.0/gpfs[12].example.com",maxTcpConnsPerNodeConn=</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">16</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 重启集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmshutdown</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF"> &#x26;&#x26; </span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmstartup</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 等待所有节点状态为 active</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmgetstate</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看网络状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">mmdiag</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --network</span></span></code></pre>
+<pre><code>* 详见 
+    * [Configuring multi-rail over TCP (MROT)](https://www.ibm.com/docs/en/storage-scale/5.2.3?topic=configuring-multi-rail-over-tcp-mrot)
+    * [Using remote access with multiple network definitions](https://www.ibm.com/docs/en/storage-scale/5.2.3?topic=system-using-remote-access-multiple-network-definitions)
+</code></pre>
+<h2 id="性能对比">性能对比<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能对比">#</a></h2>
+<p><img src="/content/images/734a4c4c-perf-tcp-rdma.png" alt="perf-tcp-rdma"></p>
+<h2 id="参考">参考<a class="heading-anchor" aria-hidden tabindex="-1" href="#参考">#</a></h2>
+<ul>
+<li><a href="https://www.spectrumscaleug.org/wp-content/uploads/2021/05/SSSD21DE-06-Improving-Spectrum-Scale-performance-using-RDMA.pdf">Improving Spectrum Scale performance using RDMA</a></li>
+<li><a href="https://www.ibm.com/docs/en/storage-scale/5.2.3?topic=administering-rdma-tuning">RDMA tuning</a></li>
+<li><a href="https://www.ibm.com/docs/en/storage-scale/5.2.2?topic=communication-using-public-private-ip-addresses-gpfs-nodes">Using public and private IP addresses for GPFS nodes</a></li>
+</ul>

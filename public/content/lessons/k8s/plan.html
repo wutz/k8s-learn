@@ -1,0 +1,93 @@
+<h1 id="集群架构与命名">集群架构与命名<a class="heading-anchor" aria-hidden tabindex="-1" href="#集群架构与命名">#</a></h1>
+<blockquote>
+<p>Beta</p>
+</blockquote>
+<p><img src="/content/images/1784be3f-arch.png" alt="arch"></p>
+<h2 id="命名">命名<a class="heading-anchor" aria-hidden tabindex="-1" href="#命名">#</a></h2>
+<h3 id="地区机房">地区机房<a class="heading-anchor" aria-hidden tabindex="-1" href="#地区机房">#</a></h3>
+<ul>
+<li>格式：<code>&#x3C;地区缩写>&#x3C;机房序号></code></li>
+<li>示例：<code>bj1</code>, <code>zw1</code>, <code>hs1</code></li>
+<li>序号总是跳过 4，可选</li>
+</ul>
+<h3 id="集群命名">集群命名<a class="heading-anchor" aria-hidden tabindex="-1" href="#集群命名">#</a></h3>
+<ul>
+<li>格式: <code>&#x3C;用途/产品/用户/项目/环境/...>&#x3C;序号></code></li>
+<li>常见
+<ul>
+<li>vast 表示 vastdata 存储集群，例如 vast1</li>
+<li>xeos 表示 XSKY XEOS 存储集群，例如 xeos1</li>
+<li>rds 表示数据库集群，例如 rds1</li>
+<li>k8s 表示提供 k8s 服务集群，例如容器云定义为 k8s1</li>
+<li>dev 表示开发集群，例如 dev1</li>
+</ul>
+</li>
+<li>面向用户的计算集群使用官方全称，例如 <code>apple1</code></li>
+<li>存储，数据库等基础设施总是假定共享多个用户使用</li>
+</ul>
+<h3 id="dns-命名">DNS 命名<a class="heading-anchor" aria-hidden tabindex="-1" href="#dns-命名">#</a></h3>
+<ul>
+<li>格式: <code>&#x3C;service>.&#x3C;cluster>.&#x3C;region>.&#x3C;domain></code></li>
+<li>常见
+<ul>
+<li><code>redis-xxxxxx.rds1.zw1.paratera.com</code></li>
+<li><code>s3.ceph1.hs1.paratera.com</code></li>
+<li><code>cr.dev1.zw1.paratera.com</code></li>
+<li><code>gf.apple1.zw1.paratera.com</code></li>
+</ul>
+</li>
+<li>第一次解析 DNS 无需区分内外网
+<ul>
+<li>当需要额外解析 DNS 以区分内外网时</li>
+<li>解析是外网时，使用 <code>-ext</code> 后缀, 例如 <code>cr.dev1.zw1-ext.paratera.com</code></li>
+<li>解析是内网时，使用 <code>-int</code> 后缀, 例如 <code>cr.dev1.zw1-int.paratera.com</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="节点命名">节点命名<a class="heading-anchor" aria-hidden tabindex="-1" href="#节点命名">#</a></h3>
+<ul>
+<li>格式：<code>&#x3C;2位字母节点角色缩写>&#x3C;ip 地址以 - 分隔></code></li>
+<li>控制节点 mn
+<ul>
+<li>生产集群至少 3 节点满足 HA 需要，最大 7 节点</li>
+<li>示例：<code>mn-10-128-0-1</code>, <code>mn-10-128-0-2</code>, <code>mn-10-128-0-3</code></li>
+</ul>
+</li>
+<li>网络负载均衡节点 ln
+<ul>
+<li>生产集群至少 2 节点满足 HA 需要, 可复用管理节点</li>
+<li>示例：<code>ln-10-128-0-11</code>, <code>ln-10-128-0-12</code></li>
+</ul>
+</li>
+<li>GPU 计算节点 gn
+<ul>
+<li>示例：<code>gn-10-128-1-1</code>, <code>gn-10-128-1-2</code>, <code>gn-10-128-1-3</code></li>
+</ul>
+</li>
+<li>CPU 计算节点 cn
+<ul>
+<li>示例：<code>cn-10-128-100-1</code>, <code>cn-10-128-100-2</code>, <code>cn-10-128-100-3</code></li>
+</ul>
+</li>
+<li>数据库节点 dn
+<ul>
+<li>生产集群至少 3 节点满足 HA 需要, 推荐配置独立节点 (酌情复用管理节点)</li>
+<li>示例：<code>dn-10-128-200-1</code>, <code>dn-10-128-200-2</code>, <code>dn-10-128-200-3</code></li>
+</ul>
+</li>
+<li>存储节点 sn
+<ul>
+<li>生产集群至少 3 节点满足 HA 需要, 推荐配置独立节点 (酌情复用管理节点)</li>
+<li>示例：<code>sn-10-128-201-1</code>, <code>sn-10-128-201-2</code>, <code>sn-10-128-201-3</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="网络">网络<a class="heading-anchor" aria-hidden tabindex="-1" href="#网络">#</a></h2>
+<ul>
+<li>所有节点至少 10Gb 以太内网互联</li>
+<li>存储节点额外提供至少 10Gb 以太网互联进行数据复制，配置此网络可以极大提供存储性能</li>
+<li>提供网络负载均衡节点至少 1Gb 接入互联网，如果不面向外部提供服务此网络可选。</li>
+</ul>
+<blockquote>
+<p>可以根据具体业务和用户需求调整网络配置。</p>
+</blockquote>

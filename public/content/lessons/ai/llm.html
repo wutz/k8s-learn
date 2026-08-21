@@ -1,0 +1,31 @@
+<h1 id="llm">LLM<a class="heading-anchor" aria-hidden tabindex="-1" href="#llm">#</a></h1>
+<p>当前社区推理框架大多部分实现功能，故而本解决方案尝试使用社区通用推理组件进行组装一个推理框架</p>
+<p>此解决方案采用通过推理组件：</p>
+<ul>
+<li>推理网关：<a href="https://gateway-api-inference-extension.sigs.k8s.io/">Gateway API Inference Extension</a> (GIE/IGW) 推理网关标准定义</li>
+<li>推理负载管理: <a href="https://github.com/sgl-project/rbg">Role Based Group</a> (RBG) 通用推理负载管理, 潜力标准定义</li>
+</ul>
+<h2 id="部署基础服务">部署基础服务<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署基础服务">#</a></h2>
+<p>依赖组件:</p>
+<ul>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/.claude/skills/metallb">MetalLB</a> 提供南北负载均衡服务</li>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/.claude/skills/istio">KGateway</a> 提供网关与推理网关服务</li>
+<li>部署 <a href="/lessons/storage">Storage</a> 提供共享存储存放模型文件</li>
+<li>部署 <a href="https://github.com/wutz/k8s-in-action/blob/main/.claude/skills/rbg">RBG</a> 提供推理负载管理</li>
+</ul>
+<p>修改基础服务配置：</p>
+<ul>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm/base/gateway.yaml">gateway</a> 部署网关服务，可以自定义端口</li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm/base/pvc.yaml">pvc</a> 部署共享存储，用于存放模型文件，可以自定义存储类型与大小</li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm/base/deploy.yaml">deploy</a> 部署开发机，用于拉取模型文件，待启动容器进入后可以执行下面命令拉取模型文件</li>
+</ul>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 例如拉取 Qwen3-32B 模型文件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">modelscope</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> download</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --model</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> Qwen/Qwen3-32B</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --local_dir</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /models/Qwen/Qwen3-32B</span></span></code></pre>
+<p>执行下面步骤完成基础服务:</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">cd</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> base</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">helmwave</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> up</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --build</span></span></code></pre>
+<h2 id="部署推理服务示例">部署推理服务示例<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署推理服务示例">#</a></h2>
+<ul>
+<li><a href="/lessons/ai/llm/vllm-sim">vllm-sim</a> 部署 vllm 模拟推理服务，适用于开发测试</li>
+<li><a href="https://github.com/wutz/k8s-in-action/blob/main/ai/llm/vllm-sts">vllm-sts</a> 部署 vllm 推理服务，适用于多个单节点推理</li>
+</ul>

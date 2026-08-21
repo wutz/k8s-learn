@@ -1,0 +1,291 @@
+<h1 id="docker-registry">Docker Registry<a class="heading-anchor" aria-hidden tabindex="-1" href="#docker-registry">#</a></h1>
+<p>基于 Docker Registry v3 + <code>joxit/docker-registry-ui</code> 的私有镜像仓库部署模板。</p>
+<p>本方案是<a href="/lessons/repo">仓库服务</a>的<strong>缺省</strong>镜像仓库，适合单集群内部使用、账号可控、只需要 push / pull / delete 的场景。</p>
+<p>如果需要多项目隔离与 RBAC、上游镜像代理缓存 (proxy cache)、漏洞扫描或跨机房复制，改用备选方案 <a href="/lessons/repo/harbor">Harbor</a>。两者部署其一即可，选型对比见 <a href="/lessons/repo">仓库服务</a>。</p>
+<h2 id="注意">注意<a class="heading-anchor" aria-hidden tabindex="-1" href="#注意">#</a></h2>
+<ul>
+<li>当前模板已启用 Docker Registry 原生 <code>htpasswd</code> Basic Auth。部署前必须先创建 <code>registry/registry-auth</code> Secret。</li>
+<li>Basic Auth 只做账号验证，不做项目级或读写权限区分。已登录账号默认可 pull / push / delete。</li>
+<li>账号密码认证必须配合 TLS 使用。LoadBalancer 明文 HTTP 只适合隔离可信内网或临时测试。</li>
+<li>当前 registry 开启删除能力，UI 也允许删除镜像。账号泄露后影响较大，需要控制账号分发。</li>
+<li>大镜像经 Ingress 上传/下载时，还需要检查 Ingress 网关的 body size、连接超时和空闲超时。</li>
+</ul>
+<h2 id="访问方式二选一">访问方式(二选一)<a class="heading-anchor" aria-hidden tabindex="-1" href="#访问方式二选一">#</a></h2>
+<ul>
+<li><strong>LoadBalancer</strong>: 使用 <code>deploy/loadbalancer/</code>
+<ul>
+<li>默认 registry 地址是 <code>192.168.3.111:5000</code></li>
+<li>默认 UI 地址是 <code>192.168.3.112:80</code></li>
+<li>适合可信内网 IP 直连</li>
+<li>客户端走明文 HTTP 时，Docker / containerd 可能需要配置 insecure registry</li>
+</ul>
+</li>
+<li><strong>Ingress + TLS</strong>: 使用 <code>tls/</code> + <code>deploy/ingress/</code>
+<ul>
+<li>默认域名是 <code>cr.example.com</code></li>
+<li>入口是 <code>https://cr.example.com</code></li>
+<li>registry / UI Service 是 ClusterIP，不分配 LoadBalancer IP</li>
+<li>适合只允许 HTTPS 域名入口的环境</li>
+</ul>
+</li>
+</ul>
+<p>如果现场确实需要同时保留 LoadBalancer 和 Ingress，见“高级场景：同时保留 IP 和域名入口”。默认不需要。</p>
+<h2 id="关键配置">关键配置<a class="heading-anchor" aria-hidden tabindex="-1" href="#关键配置">#</a></h2>
+<h3 id="存储">存储<a class="heading-anchor" aria-hidden tabindex="-1" href="#存储">#</a></h3>
+<ul>
+<li><strong>修改</strong> <code>deploy/base/pvc.yaml</code> 中的 <code>resources.requests.storage</code> 配置: 仓库存储容量，模板默认 <code>10Ti</code>
+<ul>
+<li>空间不足会导致镜像 push 失败</li>
+</ul>
+</li>
+<li><strong>修改</strong> <code>deploy/base/pvc.yaml</code> 中的 <code>accessModes</code> 配置: 模板默认 <code>ReadWriteMany</code>
+<ul>
+<li>多副本 registry 需要共享存储</li>
+<li>如果现场只有 RWO 存储，需要把 registry 副本数改成 <code>1</code></li>
+</ul>
+</li>
+<li><strong>修改</strong> <code>deploy/base/pvc.yaml</code> 中的 <code>storageClassName</code> 配置: 模板默认 <code>shared-nfs</code>
+<ul>
+<li>需要替换成现场集群实际可用的 StorageClass</li>
+<li>StorageClass 不存在或不支持 RWX 时，PVC/Pod 会卡住</li>
+</ul>
+</li>
+</ul>
+<h3 id="registry">registry<a class="heading-anchor" aria-hidden tabindex="-1" href="#registry">#</a></h3>
+<ul>
+<li><strong>修改</strong> <code>deploy/base/deployment.yaml</code> 中的 <code>replicas</code> 配置: 模板默认 <code>3</code>
+<ul>
+<li>只有确认共享存储支持多节点并发读写时，才保留多副本</li>
+</ul>
+</li>
+<li><strong>修改</strong> <code>deploy/base/deployment.yaml</code> 中的 <code>REGISTRY_HTTP_SECRET</code> 配置: 多副本必须保持一致
+<ul>
+<li>当前模板直接写在 manifest 中</li>
+<li>正式落地建议改成 Secret 引用</li>
+</ul>
+</li>
+<li><strong>准备</strong> <code>registry/registry-auth</code> Secret: registry 启动时会挂载 <code>/auth/htpasswd</code>
+<ul>
+<li>Secret 缺失会导致 registry Pod 无法启动</li>
+<li><code>htpasswd</code> 必须使用 bcrypt 格式生成，即 <code>htpasswd -Bbn</code></li>
+<li>不要把真实 <code>htpasswd</code> 文件提交进仓库</li>
+</ul>
+</li>
+<li><strong>确认</strong> <code>deploy/base/deployment.yaml</code> 中的 <code>REGISTRY_STORAGE_DELETE_ENABLED</code> 配置: 模板默认 <code>true</code>
+<ul>
+<li>开启后允许删除镜像 manifest</li>
+<li>已登录账号默认具备删除能力，账号分发要收敛</li>
+</ul>
+</li>
+</ul>
+<h3 id="loadbalancer-入口">LoadBalancer 入口<a class="heading-anchor" aria-hidden tabindex="-1" href="#loadbalancer-入口">#</a></h3>
+<ul>
+<li><strong>修改</strong> <code>deploy/loadbalancer/service.yaml</code> 中的 <code>metallb.universe.tf/loadBalancerIPs</code> 配置: registry 的 LoadBalancer IP，模板默认 <code>192.168.3.111</code></li>
+<li><strong>修改</strong> <code>deploy/loadbalancer/ui-service.yaml</code> 中的 <code>metallb.universe.tf/loadBalancerIPs</code> 配置: UI 的 LoadBalancer IP，模板默认 <code>192.168.3.112</code></li>
+<li><strong>确认</strong> <code>deploy/loadbalancer/service.yaml</code> 中的 <code>sessionAffinity</code> 配置: 模板默认 <code>ClientIP</code>
+<ul>
+<li>大镜像上传时建议保留</li>
+</ul>
+</li>
+</ul>
+<h3 id="ingress--tls-入口">Ingress + TLS 入口<a class="heading-anchor" aria-hidden tabindex="-1" href="#ingress--tls-入口">#</a></h3>
+<ul>
+<li><strong>修改</strong> <code>deploy/ingress/ingress.yaml</code> 中的 <code>host</code> 配置: 模板默认 <code>cr.example.com</code></li>
+<li><strong>修改</strong> <code>deploy/ingress/ingress.yaml</code> 中的 <code>ingressClassName</code> 配置: 模板默认 <code>istio</code>
+<ul>
+<li>如果现场不是 Istio Ingress，需要替换成实际 IngressClass</li>
+</ul>
+</li>
+<li><strong>修改</strong> <code>deploy/ingress/ingress.yaml</code> 中的 <code>tls.secretName</code> 配置: 模板默认 <code>registry-ingress</code>
+<ul>
+<li>需要和 <code>tls/kustomization.yaml</code> 中生成的 Secret 名字一致</li>
+<li>当前模板使用 Istio Ingress，TLS Secret 会创建到 <code>istio-system</code> namespace，供 <code>istio-ingressgateway</code> 加载</li>
+</ul>
+</li>
+<li><strong>准备</strong> Ingress TLS 证书: Secret 名字默认 <code>registry-ingress</code>
+<ul>
+<li>生产环境需要提前向证书管理员或企业 CA 申请正式证书</li>
+<li>正式证书文件放到 <code>tls/tls.crt</code> 和 <code>tls/tls.key</code></li>
+<li>证书 SAN 必须覆盖 Ingress host，例如 <code>cr.example.com</code></li>
+<li><code>tls/gen-cert.sh</code> 只用于生成自签证书，适合测试或临时验证，不作为生产证书流程</li>
+</ul>
+</li>
+</ul>
+<h2 id="账号-secret">账号 Secret<a class="heading-anchor" aria-hidden tabindex="-1" href="#账号-secret">#</a></h2>
+<p>部署 registry 前先创建 <code>registry-auth</code> Secret：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">USER_NAME</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">'&#x3C;用户名>'</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">USER_PASS</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">'&#x3C;密码>'</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">htpasswd</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -Bbn</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$USER_NAME</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$USER_PASS</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/registry-htpasswd</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> namespace</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --dry-run=client</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> create</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> secret</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> generic</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry-auth</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --from-file=htpasswd=/tmp/registry-htpasswd</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  --dry-run=client</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> yaml</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> -</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">rm</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tmp/registry-htpasswd</span></span></code></pre>
+<p>说明：</p>
+<ul>
+<li>本机需要有 <code>htpasswd</code> 命令；macOS 默认路径通常是 <code>/usr/sbin/htpasswd</code>。</li>
+<li><code>-B</code> 表示生成 bcrypt 格式，Docker Registry 认证必须使用该格式。</li>
+<li>Secret key 必须叫 <code>htpasswd</code>，Deployment 会挂载为 <code>/auth/htpasswd</code>。</li>
+</ul>
+<h2 id="loadbalancer">LoadBalancer<a class="heading-anchor" aria-hidden tabindex="-1" href="#loadbalancer">#</a></h2>
+<h3 id="1-部署">1. 部署<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-部署">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/loadbalancer/</span></span></code></pre>
+<blockquote>
+<p>兼容旧命令：<code>kubectl apply -k deploy/</code> 当前也会部署 LoadBalancer 模式。</p>
+</blockquote>
+<h3 id="2-验证">2. 验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-验证">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod,svc</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> http://192.168.3.111:5000/v2/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '&#x3C;用户名>:&#x3C;密码>'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> http://192.168.3.111:5000/v2/</span></span></code></pre>
+<p>预期：</p>
+<ul>
+<li>不带账号访问 <code>/v2/</code> 返回 <code>401 Unauthorized</code>。</li>
+<li>带正确账号访问 <code>/v2/</code> 返回 <code>200 OK</code>。</li>
+</ul>
+<h3 id="3-使用仓库">3. 使用仓库<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-使用仓库">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.3.111:5000</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tag</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> alpine:latest</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.3.111:5000/library/alpine:latest</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> push</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.3.111:5000/library/alpine:latest</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pull</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 192.168.3.111:5000/library/alpine:latest</span></span></code></pre>
+<p>如果客户端走明文 HTTP，Docker / containerd 可能需要配置 insecure registry。生产环境优先使用 Ingress + TLS。</p>
+<h2 id="ingress--tls">Ingress + TLS<a class="heading-anchor" aria-hidden tabindex="-1" href="#ingress--tls">#</a></h2>
+<h3 id="1-准备-tls-secret">1. 准备 TLS Secret<a class="heading-anchor" aria-hidden tabindex="-1" href="#1-准备-tls-secret">#</a></h3>
+<p>生产环境先准备正式证书：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 从证书管理员或企业 CA 提前申请，证书 SAN 必须覆盖 cr.example.com</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">正式证书.cr</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">t</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/tls.crt</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">正式证书.ke</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">y</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/tls.key</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/</span></span></code></pre>
+<p>测试或临时验证可以生成自签证书：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#C678DD">export</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75"> DOMAIN</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">cr</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">example</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">com</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">./tls/gen-cert.sh</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/</span></span></code></pre>
+<p>说明：</p>
+<ul>
+<li><code>tls/gen-cert.sh</code> 生成的是<strong>自签名证书</strong>，只适合测试环境或临时连通性验证。</li>
+<li>生产环境不要直接使用自签证书，需要提前申请正式证书并保存为 <code>tls/tls.crt</code> 和 <code>tls/tls.key</code>。</li>
+<li><code>kubectl apply -k tls/</code> 会创建 <code>istio-system/registry-ingress</code> TLS Secret。</li>
+<li>当前模板使用 <code>ingressClassName: istio</code>。实测 Istio ingressgateway 从 <code>istio-system</code> namespace 加载 TLS credential；Secret 放在 <code>registry</code> namespace 会导致 443 握手 reset。</li>
+<li><code>tls/tls-secret.yaml</code> 只是手工创建 Secret 的模板，不要直接 apply。</li>
+</ul>
+<h3 id="2-部署-ingress-模式">2. 部署 Ingress 模式<a class="heading-anchor" aria-hidden tabindex="-1" href="#2-部署-ingress-模式">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/ingress/</span></span></code></pre>
+<p>Ingress 规则：</p>
+<ul>
+<li><code>/v2</code> → <code>registry:5000</code></li>
+<li><code>/</code> → <code>registry-ui:80</code></li>
+<li><code>ingressClassName</code> → <code>istio</code></li>
+<li>TLS Secret → <code>registry-ingress</code></li>
+</ul>
+<h3 id="3-验证">3. 验证<a class="heading-anchor" aria-hidden tabindex="-1" href="#3-验证">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod,svc,ingress</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -vk</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://cr.example.com/v2/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -vk</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '&#x3C;用户名>:&#x3C;密码>'</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://cr.example.com/v2/</span></span></code></pre>
+<p>预期：</p>
+<ul>
+<li>不带账号访问 <code>/v2/</code> 返回 <code>401 Unauthorized</code>，并带 <code>WWW-Authenticate: Basic realm="Registry Realm"</code>。</li>
+<li>带正确账号访问 <code>/v2/</code> 返回 <code>200 OK</code>。</li>
+</ul>
+<h3 id="4-使用仓库">4. 使用仓库<a class="heading-anchor" aria-hidden tabindex="-1" href="#4-使用仓库">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> login</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cr.example.com</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tag</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> alpine:latest</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cr.example.com/library/alpine:latest</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> push</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cr.example.com/library/alpine:latest</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">docker</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pull</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cr.example.com/library/alpine:latest</span></span></code></pre>
+<h2 id="高级场景同时保留-ip-和域名入口">高级场景：同时保留 IP 和域名入口<a class="heading-anchor" aria-hidden tabindex="-1" href="#高级场景同时保留-ip-和域名入口">#</a></h2>
+<p>默认不需要这个模式。只有现场明确要求同时保留 <code>192.168.3.111:5000</code> 和 <code>https://cr.example.com</code> 时再使用。</p>
+<p>先部署 LoadBalancer：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/loadbalancer/</span></span></code></pre>
+<p>再准备 TLS Secret：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">正式证书.cr</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">t</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/tls.crt</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cp</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">正式证书.ke</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">y</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/tls.key</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/</span></span></code></pre>
+<p>最后只追加 Ingress 对象：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apply</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/ingress/ingress.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span></span></code></pre>
+<p>这个命令只创建 Ingress，不会把已有 LoadBalancer Service 改成 ClusterIP。</p>
+<h2 id="配置说明">配置说明<a class="heading-anchor" aria-hidden tabindex="-1" href="#配置说明">#</a></h2>
+<h3 id="deploybaseconfigyml"><code>deploy/base/config.yml</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#deploybaseconfigyml">#</a></h3>
+<ul>
+<li><code>http.addr: :5000</code>: registry 监听端口</li>
+<li><code>http.net.readtimeout</code> / <code>writetimeout</code>: 大镜像传输超时</li>
+<li><code>storage.filesystem.rootdirectory</code>: 镜像数据目录</li>
+<li><code>storage.delete.enabled: true</code>: 允许删除镜像</li>
+<li><code>http2.maxconcurrentstreams</code>: 只有 TLS 场景才更有意义，纯 HTTP 下不要指望 h2c</li>
+</ul>
+<h3 id="deploybasedeploymentyaml"><code>deploy/base/deployment.yaml</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#deploybasedeploymentyaml">#</a></h3>
+<ul>
+<li><code>image: registry:3.0.0</code></li>
+<li>挂载 <code>config.yml</code></li>
+<li>挂载 <code>registry-auth</code> Secret 到 <code>/auth/htpasswd</code></li>
+<li>挂载 PVC 到 <code>/var/lib/registry</code></li>
+<li><code>REGISTRY_AUTH=htpasswd</code>: 启用 Docker Registry 原生 Basic Auth</li>
+<li><code>REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd</code>: 读取账号密码文件</li>
+<li><code>REGISTRY_HTTP_SECRET</code> 当前硬编码在 manifest 中；正式落地建议改为 Secret 引用</li>
+</ul>
+<h3 id="deploybaseui-deploymentyaml"><code>deploy/base/ui-deployment.yaml</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#deploybaseui-deploymentyaml">#</a></h3>
+<ul>
+<li><code>NGINX_PROXY_PASS_URL</code> 默认指向 <code>http://registry:5000</code></li>
+<li>如果改 Service 名称，要同步改这里</li>
+<li><code>DELETE_IMAGES=true</code> 会允许通过 UI 删除镜像；已登录账号可执行删除操作</li>
+</ul>
+<h3 id="deployloadbalancerserviceyaml--deployloadbalancerui-serviceyaml"><code>deploy/loadbalancer/service.yaml</code> / <code>deploy/loadbalancer/ui-service.yaml</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#deployloadbalancerserviceyaml--deployloadbalancerui-serviceyaml">#</a></h3>
+<ul>
+<li>LoadBalancer 模式使用这两个 Service</li>
+<li>高级共存场景也复用这两个 Service</li>
+</ul>
+<h3 id="deployingressservice-clusteripyaml--deployingressui-service-clusteripyaml"><code>deploy/ingress/service-clusterip.yaml</code> / <code>deploy/ingress/ui-service-clusterip.yaml</code><a class="heading-anchor" aria-hidden tabindex="-1" href="#deployingressservice-clusteripyaml--deployingressui-service-clusteripyaml">#</a></h3>
+<ul>
+<li>Ingress + TLS 模式使用这两个 ClusterIP Service</li>
+<li>不会分配 LoadBalancer IP</li>
+</ul>
+<h2 id="删除镜像">删除镜像<a class="heading-anchor" aria-hidden tabindex="-1" href="#删除镜像">#</a></h2>
+<p>先取 manifest digest：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">digest</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -sI</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '&#x3C;用户名>:&#x3C;密码>'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66">  -H</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'Accept: application/vnd.docker.distribution.manifest.v2+json'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  http://</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">registry-ur</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">l</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/v2/</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">imag</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/manifests/</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">ta</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">g</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">  |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> awk</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -F</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">': '</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 'tolower($1)=="docker-content-digest"{print $2}'</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">  |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> tr</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -d</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '\r'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$digest</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span></span></code></pre>
+<p>再删除 manifest：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -v</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -u</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '&#x3C;用户名>:&#x3C;密码>'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -X</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> DELETE</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  http://</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">registry-ur</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">l</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/v2/</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">imag</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">e</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF">></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">/manifests/</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$digest</span></span></code></pre>
+<p>说明：删除 manifest 后，磁盘空间不会立刻释放，需要再执行安全 GC。</p>
+<h2 id="安全垃圾回收">安全垃圾回收<a class="heading-anchor" aria-hidden tabindex="-1" href="#安全垃圾回收">#</a></h2>
+<p>不要在仍有 push/upload 写入时直接 GC。最小安全流程：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 1. 先停止写入入口；示例：临时缩容 registry</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=0</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 2. 启动单副本用于执行 GC</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> rollout</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> status</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 3. 执行 GC</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">pod</span><span style="--shiki-light:#D73A49;--shiki-dark:#56B6C2">=</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">$(</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> get</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> pod</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -l</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> app=registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -o</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> jsonpath='{.items[0].metadata.name}'</span><span style="--shiki-light:#24292E;--shiki-dark:#ABB2BF">)</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> exec</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "</span><span style="--shiki-light:#24292E;--shiki-dark:#E06C75">$pod</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379">"</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --</span><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2"> \</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  registry</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> garbage-collect</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/docker/registry/config.yml</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 4. 恢复副本数</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> scale</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --replicas=3</span></span></code></pre>
+<p>更稳妥的生产做法是：停止入口流量后，用专门 GC Job 挂载同一个 PVC 执行垃圾回收。</p>
+<h2 id="性能基准">性能基准<a class="heading-anchor" aria-hidden tabindex="-1" href="#性能基准">#</a></h2>
+<p>见：</p>
+<ul>
+<li><code>benchmark/README.md</code></li>
+<li><code>benchmark/generate_image.sh</code></li>
+</ul>
+<h2 id="卸载">卸载<a class="heading-anchor" aria-hidden tabindex="-1" href="#卸载">#</a></h2>
+<h3 id="loadbalancer-1">LoadBalancer<a class="heading-anchor" aria-hidden tabindex="-1" href="#loadbalancer-1">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/loadbalancer/</span></span></code></pre>
+<p>如果使用旧命令部署，也可以执行：</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/</span></span></code></pre>
+<h3 id="ingress--tls-1">Ingress + TLS<a class="heading-anchor" aria-hidden tabindex="-1" href="#ingress--tls-1">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/ingress/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/</span></span></code></pre>
+<h3 id="高级共存场景">高级共存场景<a class="heading-anchor" aria-hidden tabindex="-1" href="#高级共存场景">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -f</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/ingress/ingress.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -n</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> registry</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tls/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">kubectl</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> delete</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -k</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy/loadbalancer/</span></span></code></pre>
+<p>如果 PVC 需要保留镜像数据，删除前先确认存储回收策略。</p>

@@ -1,0 +1,114 @@
+<h1 id="部署-tikv-集群">部署 TiKV 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署-tikv-集群">#</a></h1>
+<p>TiKV 相比 Redis 更适合作为分布式 KV 存储，支持分布式事务，数据一致性更高。</p>
+<h2 id="软硬件配置"><a href="https://docs.pingcap.com/zh/tidb/stable/hardware-and-software-requirements">软硬件配置</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#软硬件配置">#</a></h2>
+<ul>
+<li>节点数量：至少 3 台</li>
+<li>操作系统：Ubuntu 22.04</li>
+<li>组件资源配置：
+<ul>
+<li>PD：8 核+，16GB+，SSD，万兆网络+，3 实例</li>
+<li>TiKV：16 核+，64GB+，SSD，万兆网络+，3 实例</li>
+<li>监控：8 核+，16GB+，SAS，千兆网络+，1 实例</li>
+</ul>
+<blockquote>
+<ul>
+<li>PD 和 TiKV 可运行同一节点</li>
+<li>TiKV 硬盘配置 NVMe SSD 不超过 4 TB, SAS SSD 不超过 1.5 TB</li>
+</ul>
+</blockquote>
+</li>
+</ul>
+<h2 id="系统配置"><a href="https://docs.pingcap.com/zh/tidb/stable/check-before-deployment">系统配置</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#系统配置">#</a></h2>
+<p>执行 <a href="https://github.com/wutz/k8s-in-action/blob/main/db/docs/0-prepare.md">准备节点</a></p>
+<p>配置内核参数</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 99-tikv.conf</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vm.swappiness = 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">net.ipv4.tcp_syncookies = 0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">fs.nr_open  = 20000000</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">fs.file-max = 40000000</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">vm.max_map_count = 5642720</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdcp</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> 99-tikv.conf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/sysctl.d/</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> sysctl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --system</span></span></code></pre>
+<p>安装 numactl</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> apt</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> install</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> numactl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -y</span></span></code></pre>
+<p>格式化和挂载磁盘设备</p>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mkfs.ext4</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/nvme0n1</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> e2label</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /dev/nvme0n1</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mkdir</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -p</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /tikv</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cp</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab.bak</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> echo</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> "LABEL=tikv /tikv ext4 defaults,nodelalloc,noatime 0 2"</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> >></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> /etc/fstab</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">pdsh</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -w</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ^all</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> mount</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -a</span></span></code></pre>
+<h2 id="部署与启动">部署与启动<a class="heading-anchor" aria-hidden tabindex="-1" href="#部署与启动">#</a></h2>
+<h3 id="使用-tiup-部署-tikv-集群"><a href="https://docs.pingcap.com/zh/tidb/stable/production-deployment-using-tiup">使用 TiUP 部署 TiKV 集群</a><a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-tiup-部署-tikv-集群">#</a></h3>
+<pre class="shiki shiki-themes github-light one-dark-pro" style="--shiki-light:#24292e;--shiki-dark:#abb2bf;--shiki-light-bg:#fff;--shiki-dark-bg:#282c34" tabindex="0"><code><span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 TiUP</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">curl</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --proto</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> '=https'</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --tlsv1.2</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> -sSf</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> https://tiup-mirrors.pingcap.com/install.sh</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> |</span><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF"> sh</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">source</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ~/.bashrc</span></span>
+<span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#56B6C2">which</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tiup</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 安装 TiUP Cluster 组件</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 配置 topology.yaml</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">cat</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> &#x3C;&#x3C;</span><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF"> EOF</span><span style="--shiki-light:#D73A49;--shiki-dark:#ABB2BF"> ></span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> topology.yaml</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">global:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  user: "tikv"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  ssh_port: 22</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  deploy_dir: "/tikv/deploy"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  data_dir: "/tikv/data"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  listen_host: 0.0.0.0</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  arch: "amd64"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  enable_tls: true</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    memory_limit: "16G"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    cpu_quota: "800%"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">pd_servers:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.3</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">tikv_servers:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      memory_limit: "64G"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      cpu_quota: "1600%"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.2</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      memory_limit: "64G"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      cpu_quota: "1600%"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.3</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">    resource_control:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      memory_limit: "64G"</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">      cpu_quota: "1600%"</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">monitored:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  node_exporter_port: 9200</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">monitoring_servers:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.1</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">grafana_servers:</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#98C379">  - host: 172.19.12.1</span></span>
+<span class="line"><span style="--shiki-light:#032F62;--shiki-dark:#ABB2BF">EOF</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 检查集群存在的潜在风险</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> check</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./topology.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 自动修复集群存在的潜在风险</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> check</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./topology.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --apply</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 部署 TiKV 集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> deploy</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv01</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> v8.1.2</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> ./topology.yaml</span><span style="--shiki-light:#005CC5;--shiki-dark:#D19A66"> --user</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> root</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看集群状态</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> list</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看集群详情</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> display</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv01</span></span>
+<span class="line"></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 启动集群</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> start</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv01</span></span>
+<span class="line"><span style="--shiki-light:#6A737D;--shiki-light-font-style:inherit;--shiki-dark:#7F848E;--shiki-dark-font-style:italic"># 查看集群状态, 输出包含 tls 文件路径用于客户端访问时使用</span></span>
+<span class="line"><span style="--shiki-light:#6F42C1;--shiki-dark:#61AFEF">tiup</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> cluster</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> display</span><span style="--shiki-light:#032F62;--shiki-dark:#98C379"> tikv01</span></span>
+<span class="line"></span></code></pre>
+<h3 id="使用-tidb-operator-部署-tikv-集群">使用 TiDB Operator 部署 TiKV 集群<a class="heading-anchor" aria-hidden tabindex="-1" href="#使用-tidb-operator-部署-tikv-集群">#</a></h3>
+<blockquote>
+<p>🚧️ 正在施工中</p>
+</blockquote>
