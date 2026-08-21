@@ -10,33 +10,128 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as LessonsSplatRouteImport } from './routes/lessons.$'
+import { Route as ModulesIndexRouteImport } from './routes/modules.index'
+import { Route as ModulesModuleIdRouteImport } from './routes/modules.$moduleId'
+import { Route as PathsIndexRouteImport } from './routes/paths.index'
+import { Route as PathsPathIdRouteImport } from './routes/paths.$pathId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LessonsSplatRoute = LessonsSplatRouteImport.update({
+  id: '/lessons/$',
+  path: '/lessons/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesIndexRoute = ModulesIndexRouteImport.update({
+  id: '/modules/',
+  path: '/modules/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModulesModuleIdRoute = ModulesModuleIdRouteImport.update({
+  id: '/modules/$moduleId',
+  path: '/modules/$moduleId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PathsIndexRoute = PathsIndexRouteImport.update({
+  id: '/paths/',
+  path: '/paths/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PathsPathIdRoute = PathsPathIdRouteImport.update({
+  id: '/paths/$pathId',
+  path: '/paths/$pathId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/progress': typeof ProgressRoute
+  '/search': typeof SearchRoute
+  '/lessons/$': typeof LessonsSplatRoute
+  '/modules/$moduleId': typeof ModulesModuleIdRoute
+  '/paths/$pathId': typeof PathsPathIdRoute
+  '/modules/': typeof ModulesIndexRoute
+  '/paths/': typeof PathsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/progress': typeof ProgressRoute
+  '/search': typeof SearchRoute
+  '/lessons/$': typeof LessonsSplatRoute
+  '/modules/$moduleId': typeof ModulesModuleIdRoute
+  '/paths/$pathId': typeof PathsPathIdRoute
+  '/modules': typeof ModulesIndexRoute
+  '/paths': typeof PathsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/progress': typeof ProgressRoute
+  '/search': typeof SearchRoute
+  '/lessons/$': typeof LessonsSplatRoute
+  '/modules/$moduleId': typeof ModulesModuleIdRoute
+  '/paths/$pathId': typeof PathsPathIdRoute
+  '/modules/': typeof ModulesIndexRoute
+  '/paths/': typeof PathsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/progress'
+    | '/search'
+    | '/lessons/$'
+    | '/modules/$moduleId'
+    | '/paths/$pathId'
+    | '/modules/'
+    | '/paths/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/progress'
+    | '/search'
+    | '/lessons/$'
+    | '/modules/$moduleId'
+    | '/paths/$pathId'
+    | '/modules'
+    | '/paths'
+  id:
+    | '__root__'
+    | '/'
+    | '/progress'
+    | '/search'
+    | '/lessons/$'
+    | '/modules/$moduleId'
+    | '/paths/$pathId'
+    | '/modules/'
+    | '/paths/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ProgressRoute: typeof ProgressRoute
+  SearchRoute: typeof SearchRoute
+  LessonsSplatRoute: typeof LessonsSplatRoute
+  ModulesModuleIdRoute: typeof ModulesModuleIdRoute
+  PathsPathIdRoute: typeof PathsPathIdRoute
+  ModulesIndexRoute: typeof ModulesIndexRoute
+  PathsIndexRoute: typeof PathsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +143,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lessons/$': {
+      id: '/lessons/$'
+      path: '/lessons/$'
+      fullPath: '/lessons/$'
+      preLoaderRoute: typeof LessonsSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules/': {
+      id: '/modules/'
+      path: '/modules'
+      fullPath: '/modules/'
+      preLoaderRoute: typeof ModulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/modules/$moduleId': {
+      id: '/modules/$moduleId'
+      path: '/modules/$moduleId'
+      fullPath: '/modules/$moduleId'
+      preLoaderRoute: typeof ModulesModuleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/paths/': {
+      id: '/paths/'
+      path: '/paths'
+      fullPath: '/paths/'
+      preLoaderRoute: typeof PathsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/paths/$pathId': {
+      id: '/paths/$pathId'
+      path: '/paths/$pathId'
+      fullPath: '/paths/$pathId'
+      preLoaderRoute: typeof PathsPathIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ProgressRoute: ProgressRoute,
+  SearchRoute: SearchRoute,
+  LessonsSplatRoute: LessonsSplatRoute,
+  ModulesModuleIdRoute: ModulesModuleIdRoute,
+  PathsPathIdRoute: PathsPathIdRoute,
+  ModulesIndexRoute: ModulesIndexRoute,
+  PathsIndexRoute: PathsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

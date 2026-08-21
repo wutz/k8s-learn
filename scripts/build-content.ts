@@ -624,10 +624,10 @@ async function main() {
   };
   fs.writeFileSync(path.join(GENERATED, "manifest.json"), JSON.stringify(manifest, null, 2));
 
-  /* ---- 搜索文档 ---- */
+  /* ---- 搜索文档（public，客户端懒加载） ---- */
   fs.writeFileSync(
-    path.join(GENERATED, "search-docs.json"),
-    JSON.stringify(searchDocs, null, 2),
+    path.join(PUBLIC_CONTENT, "search-docs.json"),
+    JSON.stringify(searchDocs),
   );
 
   /* ---- 报告 ---- */
