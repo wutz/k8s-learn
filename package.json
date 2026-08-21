@@ -1,0 +1,55 @@
+{
+  "name": "k8s-learn",
+  "version": "0.1.0",
+  "description": "交互式 Kubernetes 学习站 — 基于 k8s-in-action 实战手册",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@10.7.1",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "pnpm build && wrangler deploy",
+    "content:build": "tsx scripts/build-content.ts",
+    "cf:typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply k8s-learn --local",
+    "db:migrate:remote": "wrangler d1 migrations apply k8s-learn --remote"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.31",
+    "@tanstack/react-start": "1.168.48",
+    "mermaid": "11.17.0",
+    "minisearch": "7.2.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.53.1",
+    "@shikijs/rehype": "4.4.3",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "gray-matter": "4.0.3",
+    "rehype-autolink-headings": "7.1.0",
+    "rehype-slug": "6.0.0",
+    "remark-gfm": "4.0.1",
+    "remark-parse": "11.0.0",
+    "remark-rehype": "11.1.2",
+    "shiki": "4.4.3",
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "unified": "11.0.5",
+    "vite": "8.2.2",
+    "wrangler": "4.125.0"
+  }
+}
